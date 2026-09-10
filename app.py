@@ -461,17 +461,32 @@ def call_llm(provider, api_key, model, prompt, response_format=None):
     
     if provider == "Google Gemini":
         genai.configure(api_key=api_key)
-        # Use generative model
         generation_config = {}
         if response_format == "json":
             generation_config["response_mime_type"] = "application/json"
         
-        model_instance = genai.GenerativeModel(model_name=model)
-        response = model_instance.generate_content(
-            prompt,
-            generation_config=generation_config
-        )
-        return response.text.strip()
+        # Try requested model, and fallback to active standard models if needed
+        try:
+            model_instance = genai.GenerativeModel(model_name=model)
+            response = model_instance.generate_content(
+                prompt,
+                generation_config=generation_config
+            )
+            return response.text.strip()
+        except Exception as e:
+            fallback_candidates = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-1.5-flash", "gemini-2.5-pro"]
+            for fb_name in fallback_candidates:
+                if fb_name != model:
+                    try:
+                        fb_instance = genai.GenerativeModel(model_name=fb_name)
+                        fb_resp = fb_instance.generate_content(
+                            prompt,
+                            generation_config=generation_config
+                        )
+                        return fb_resp.text.strip()
+                    except Exception:
+                        continue
+            raise e
         
     elif provider == "OpenAI":
         client = OpenAI(api_key=api_key)
@@ -1071,7 +1086,7 @@ def get_available_models(provider, api_key):
 
 def get_fallback_models(provider):
     if provider == "Google Gemini":
-        return ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-flash-lite-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+        return ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-1.5-flash", "gemini-2.5-pro", "gemini-1.5-pro"]
     elif provider == "OpenAI":
         return ["gpt-4o-mini", "gpt-4o", "o1-mini"]
     elif provider == "Groq":
@@ -1120,8 +1135,8 @@ def get_secret(key_name, fallback=""):
 # Safe default values used in background execution for all users
 provider = "Google Gemini"
 api_key = get_secret("GEMINI_API_KEY", "") or get_secret("GOOGLE_API_KEY", "") or get_secret("API_KEY", "")
-premium_model = "gemini-3.1-flash-lite"
-cheaper_model = "gemini-3.1-flash-lite"
+premium_model = "gemini-2.5-flash"
+cheaper_model = "gemini-2.5-flash"
 sender_email = get_secret("SENDER_EMAIL", "") or get_secret("EMAIL", "") or "hemanthswarna3838@gmail.com"
 gmail_app_password = get_secret("GMAIL_APP_PASSWORD", "") or get_secret("GMAIL_PASSWORD", "") or get_secret("APP_PASSWORD", "")
 auto_create_draft = True
@@ -1213,7 +1228,7 @@ with st.sidebar:
             dropdown_options = models_options + ["Custom..."]
             
             # Premium model default targets
-            p_targets = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-flash-lite-latest", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro", "gpt-4o", "llama-3.1-70b-versatile"]
+            p_targets = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-1.5-flash", "gemini-2.5-pro", "gemini-1.5-pro", "gpt-4o", "llama-3.1-70b-versatile"]
             p_default_idx = get_default_index(dropdown_options, p_targets)
             
             p_sel = st.selectbox(
@@ -1227,7 +1242,7 @@ with st.sidebar:
                 premium_model = p_sel
                 
             # Cheaper model default targets
-            c_targets = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-flash-lite-latest", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gpt-4o-mini", "llama-3.1-8b-instant"]
+            c_targets = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-1.5-flash", "gpt-4o-mini", "llama-3.1-8b-instant"]
             c_default_idx = get_default_index(dropdown_options, c_targets)
             
             c_sel = st.selectbox(
@@ -1378,129 +1393,113 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Metrics row
-m_col1, m_col2, m_col3 = st.columns(3)
-with m_col1:
-    st.metric(label="● Active Workspaces", value=total_apps)
-with m_col2:
-    st.metric(label="● In Queue", value=pending_queue)
-with m_col3:
-    st.metric(label="● Logged Today", value=apps_today)
 
-st.markdown("<div style='margin-bottom: 0.6rem;'></div>", unsafe_allow_html=True)
-
-main_tabs = st.tabs(["Tailoring Workspace", "Application History"])
-
-with main_tabs[0]:
-    left_col, right_col = st.columns([1, 1.2])
+def render_jd_input_and_queue(is_admin_mode=False):
+    st.header("Job Descriptions Queue")
     
-    # ----------------- LEFT COLUMN: JD INPUT & QUEUE -----------------
-    with left_col:
-        st.header("Job Descriptions Queue")
-        
-        # File uploader option
-        uploaded_file = st.file_uploader(
-            "Upload Job Description (TXT or PDF)", 
-            type=["txt", "pdf"],
-            key=f"jd_uploader_{st.session_state.jd_input_counter}"
-        )
-        if uploaded_file is not None:
-            try:
-                # Read text
-                if uploaded_file.name.lower().endswith(".pdf"):
-                    import pypdf
-                    reader = pypdf.PdfReader(uploaded_file)
-                    text = ""
-                    for page in reader.pages:
-                        text += page.extract_text() or ""
-                    new_text = text.strip()
-                else:
-                    new_text = uploaded_file.read().decode("utf-8").strip()
-                
-                # Update text area value
-                if new_text and new_text != st.session_state.current_jd_input:
-                    st.session_state.current_jd_input = new_text
-                    st.session_state.jd_input_counter += 1
-                    st.toast("File text loaded successfully")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Error reading file: {e}")
+    # File uploader option
+    uploaded_file = st.file_uploader(
+        "Upload Job Description (TXT or PDF)", 
+        type=["txt", "pdf"],
+        key=f"jd_uploader_{st.session_state.jd_input_counter}"
+    )
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.lower().endswith(".pdf"):
+                import pypdf
+                reader = pypdf.PdfReader(uploaded_file)
+                text = ""
+                for page in reader.pages:
+                    text += page.extract_text() or ""
+                new_text = text.strip()
+            else:
+                new_text = uploaded_file.read().decode("utf-8").strip()
+            
+            if new_text and new_text != st.session_state.current_jd_input:
+                st.session_state.current_jd_input = new_text
+                st.session_state.jd_input_counter += 1
+                st.toast("File text loaded successfully")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
 
-        # Text Box to Paste New Job Description
-        new_jd = st.text_area(
-            "Paste Job Description (JD) here:",
-            value=st.session_state.current_jd_input,
-            placeholder="Include job title, company name, recruiter email, phone, location, and requirements...",
-            height=200,
-            key=f"jd_text_area_{st.session_state.jd_input_counter}"
-        )
-        
-        # Get Job Manager singleton
-        job_mgr = get_job_manager()
+    # Text Box to Paste New Job Description
+    new_jd = st.text_area(
+        "Paste Job Description (JD) here:",
+        value=st.session_state.current_jd_input,
+        placeholder="Include job title, company name, recruiter email, phone, location, and requirements...",
+        height=200,
+        key=f"jd_text_area_{st.session_state.jd_input_counter}"
+    )
+    
+    job_mgr = get_job_manager()
 
-        # Sync background worker results to session state
-        has_running_jobs = False
-        for q_item in st.session_state.queue:
-            q_id = q_item["id"]
-            bg_job = job_mgr.get_job(q_id)
-            if bg_job:
-                q_item["status"] = bg_job["status"]
-                q_item["progress"] = bg_job.get("progress", "")
-                q_item["error"] = bg_job.get("error")
-                if bg_job["status"] == "Done" and bg_job["result"]:
-                    if q_id not in st.session_state.applications:
-                        st.session_state.applications[q_id] = bg_job["result"]
-                        if not st.session_state.selected_tab:
-                            st.session_state.selected_tab = q_id
-            if q_item["status"] == "Processing":
-                has_running_jobs = True
+    # Sync background worker results to session state
+    has_running_jobs = False
+    for q_item in st.session_state.queue:
+        q_id = q_item["id"]
+        bg_job = job_mgr.get_job(q_id)
+        if bg_job:
+            q_item["status"] = bg_job["status"]
+            q_item["progress"] = bg_job.get("progress", "")
+            q_item["error"] = bg_job.get("error")
+            if bg_job["status"] == "Done" and bg_job["result"]:
+                if q_id not in st.session_state.applications:
+                    st.session_state.applications[q_id] = bg_job["result"]
+                    if not st.session_state.selected_tab:
+                        st.session_state.selected_tab = q_id
+        if q_item["status"] == "Processing":
+            has_running_jobs = True
 
-        # Action Buttons for JD Queue
+    # Action Buttons for JD Queue
+    if is_admin_mode:
         q_col1, q_col2, q_col3 = st.columns([1.5, 1, 1])
-        
-        with q_col1:
-            if st.button("▶ Queue & Run", use_container_width=True, type="primary"):
-                if new_jd.strip():
-                    if not api_key:
-                        st.error("Please enter an API Key in the sidebar or Secrets first.")
-                    else:
-                        jd_id = f"job_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(st.session_state.queue) + 1}"
-                        lines = [l.strip() for l in new_jd.strip().split("\n") if l.strip()]
-                        preview_title = lines[0][:40] + "..." if lines else "Untitled JD"
-                        
-                        st.session_state.queue.append({
-                            "id": jd_id,
-                            "jd_text": new_jd,
-                            "preview": preview_title,
-                            "status": "Processing",
-                            "progress": "",
-                            "error": None
-                        })
-                        
-                        job_mgr.submit_job(
-                            job_id=jd_id,
-                            jd_text=new_jd,
-                            provider=provider,
-                            api_key=api_key,
-                            cheaper_model=cheaper_model,
-                            premium_model=premium_model,
-                            base_resume_latex=st.session_state.base_resume_latex,
-                            sender_email=sender_email,
-                            gmail_app_password=gmail_app_password,
-                            auto_create_draft=auto_create_draft,
-                            download_dir=download_dir
-                        )
-                        
-                        # Immediately clear input & increment counter so text area is 100% empty and ready for next JD
-                        st.session_state.current_jd_input = ""
-                        st.session_state.jd_input_counter += 1
-                        st.toast("Application queued")
-                        st.rerun()
+    else:
+        q_col1 = st.container()
+    
+    with q_col1:
+        if st.button("▶ Queue & Run", use_container_width=True, type="primary", key="btn_queue_run_main"):
+            if new_jd.strip():
+                if not api_key:
+                    st.error("Please configure API Key in Streamlit Secrets or sidebar.")
                 else:
-                    st.error("Please paste a job description first.")
+                    jd_id = f"job_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(st.session_state.queue) + 1}"
+                    lines = [l.strip() for l in new_jd.strip().split("\n") if l.strip()]
+                    preview_title = lines[0][:40] + "..." if lines else "Untitled JD"
                     
+                    st.session_state.queue.append({
+                        "id": jd_id,
+                        "jd_text": new_jd,
+                        "preview": preview_title,
+                        "status": "Processing",
+                        "progress": "",
+                        "error": None
+                    })
+                    
+                    job_mgr.submit_job(
+                        job_id=jd_id,
+                        jd_text=new_jd,
+                        provider=provider,
+                        api_key=api_key,
+                        cheaper_model=cheaper_model,
+                        premium_model=premium_model,
+                        base_resume_latex=st.session_state.base_resume_latex,
+                        sender_email=sender_email,
+                        gmail_app_password=gmail_app_password,
+                        auto_create_draft=auto_create_draft,
+                        download_dir=download_dir
+                    )
+                    
+                    st.session_state.current_jd_input = ""
+                    st.session_state.jd_input_counter += 1
+                    st.toast("Application queued")
+                    st.rerun()
+            else:
+                st.error("Please paste a job description first.")
+                
+    if is_admin_mode:
         with q_col2:
-            if st.button("+ Add to Queue", use_container_width=True):
+            if st.button("+ Add to Queue", use_container_width=True, key="btn_add_queue_main"):
                 if new_jd.strip():
                     jd_id = f"job_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(st.session_state.queue) + 1}"
                     lines = [l.strip() for l in new_jd.strip().split("\n") if l.strip()]
@@ -1521,12 +1520,12 @@ with main_tabs[0]:
                     st.error("Please paste a job description first.")
                     
         with q_col3:
-            if st.button("▶ Run Pending", use_container_width=True):
+            if st.button("▶ Run Pending", use_container_width=True, key="btn_run_pending_main"):
                 pending_jobs = [j for j in st.session_state.queue if j["status"] in ["Pending", "Error"]]
                 if not pending_jobs:
                     st.info("No pending jobs to process.")
                 elif not api_key:
-                    st.error("Please enter an API Key in the sidebar first.")
+                    st.error("Please enter an API Key in Streamlit Secrets or sidebar.")
                 else:
                     for pj in pending_jobs:
                         pj["status"] = "Processing"
@@ -1548,410 +1547,384 @@ with main_tabs[0]:
                     st.toast(f"Processing {len(pending_jobs)} job(s)")
                     st.rerun()
 
-        st.markdown("---")
-        
-        # Self-refreshing Queue Status Fragment for smooth live updates without page freeze
-        @st.fragment(run_every="2s" if has_running_jobs else None)
-        def render_queue_status():
-            st.subheader("Queue Status")
-            with st.container(height=350):
-                if not st.session_state.queue:
-                    st.caption("Your queue is empty. Paste a JD above and click 'Queue & Run' to begin.")
-                else:
-                    for idx, job in enumerate(st.session_state.queue):
-                        card_id = job["id"]
-                        
-                        # Sync latest status from manager if running
-                        bg = job_mgr.get_job(card_id)
-                        if bg:
-                            job["status"] = bg["status"]
-                            job["progress"] = bg.get("progress", "")
-                            job["error"] = bg.get("error")
-                            if bg["status"] == "Done" and bg["result"]:
-                                if card_id not in st.session_state.applications:
-                                    st.session_state.applications[card_id] = bg["result"]
-                        
-                        status = job["status"]
-                        
-                        # Badge styles
-                        if status == "Pending":
-                            badge_html = '<span class="badge badge-pending">Pending</span>'
-                        elif status == "Processing":
-                            badge_html = '<span class="badge badge-processing">Processing...</span>'
-                        elif status == "Done":
-                            badge_html = '<span class="badge badge-done">Completed</span>'
-                        elif status == "Error":
-                            badge_html = '<span class="badge badge-error">Failed</span>'
-                        else:
-                            badge_html = f'<span class="badge badge-pending">{status}</span>'
-                        
-                        with st.container(border=True):
-                            c_title, c_badge = st.columns([2, 1])
-                            with c_title:
-                                st.markdown(f"**Job #{idx+1}**")
-                            with c_badge:
-                                st.markdown(badge_html, unsafe_allow_html=True)
-                                
-                            st.markdown(f"<div style='font-size:0.85rem; color:#636D5F; margin-bottom: 0.5rem;'>{job['preview']}</div>", unsafe_allow_html=True)
-                            
-                            # Action buttons for this card
-                            c1, c2, c3 = st.columns([1, 1, 1])
-                            with c1:
-                                if st.button("▶ Run", key=f"gen_{card_id}", disabled=(status == "Processing"), use_container_width=True):
-                                    if not api_key:
-                                        st.error("Enter API Key in sidebar first.")
-                                    else:
-                                        job["status"] = "Processing"
-                                        job["error"] = None
-                                        job_mgr.submit_job(
-                                            job_id=card_id,
-                                            jd_text=job["jd_text"],
-                                            provider=provider,
-                                            api_key=api_key,
-                                            cheaper_model=cheaper_model,
-                                            premium_model=premium_model,
-                                            base_resume_latex=st.session_state.base_resume_latex,
-                                            sender_email=sender_email,
-                                            gmail_app_password=gmail_app_password,
-                                            auto_create_draft=auto_create_draft,
-                                            download_dir=download_dir
-                                        )
-                                        st.rerun()
-                            with c2:
-                                with st.popover("◎ Details", use_container_width=True):
-                                    st.text_area("Full Job Description", value=job["jd_text"], height=300, disabled=True, key=f"jd_text_view_{card_id}")
-                            with c3:
-                                if st.button("✕ Del", key=f"del_{card_id}", use_container_width=True):
-                                    st.session_state.queue.pop(idx)
-                                    st.toast("Removed job from queue")
-                                    st.rerun()
-                                    
-                            if job.get("error"):
-                                st.error(f"Error: {job['error']}")
-
-        render_queue_status()
+    st.markdown("---")
     
-    # ----------------- RIGHT COLUMN: TAILORED OUTPUTS -----------------
-    with right_col:
-        st.header("Tailored Output & Files")
-        
-        with st.container(height=800):
-            if not st.session_state.applications:
-                st.markdown(
-                    """
-                    <div style="text-align: center; padding: 80px 20px; color: #636D5F;">
-                        <h3 style="margin: 0 0 8px 0; color: #141813; font-weight: 700; font-size: 1.5rem;">No Active Workspaces</h3>
-                        <p style="margin: 0 auto; max-width: 420px; font-size: 0.95rem; color: #636D5F; line-height: 1.6;">
-                            Paste a Job Description on the left and click <b>Queue & Run</b>. Your customized resumes and cover emails will appear here.
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
+    # Self-refreshing Queue Status Fragment for smooth live updates without page freeze
+    @st.fragment(run_every="2s" if has_running_jobs else None)
+    def render_queue_status():
+        st.subheader("Queue Status")
+        with st.container(height=350):
+            if not st.session_state.queue:
+                st.caption("Your queue is empty. Paste a JD above and click 'Queue & Run' to begin.")
             else:
-                apps_dict = st.session_state.applications
-                app_keys = list(apps_dict.keys())
+                job_completed_now = False
+                for idx, job in enumerate(st.session_state.queue):
+                    card_id = job["id"]
+                    
+                    # Sync latest status from manager if running
+                    bg = job_mgr.get_job(card_id)
+                    if bg:
+                        job["status"] = bg["status"]
+                        job["progress"] = bg.get("progress", "")
+                        job["error"] = bg.get("error")
+                        if bg["status"] == "Done" and bg["result"]:
+                            if card_id not in st.session_state.applications:
+                                st.session_state.applications[card_id] = bg["result"]
+                                if not st.session_state.selected_tab:
+                                    st.session_state.selected_tab = card_id
+                                job_completed_now = True
+                    
+                    status = job["status"]
+                    
+                    # Badge styles
+                    if status == "Pending":
+                        badge_html = '<span class="badge badge-pending">Pending</span>'
+                    elif status == "Processing":
+                        badge_html = '<span class="badge badge-processing">Processing...</span>'
+                    elif status == "Done":
+                        badge_html = '<span class="badge badge-done">Completed</span>'
+                    elif status == "Error":
+                        badge_html = '<span class="badge badge-error">Failed</span>'
+                    else:
+                        badge_html = f'<span class="badge badge-pending">{status}</span>'
+                    
+                    with st.container(border=True):
+                        c_title, c_badge = st.columns([2, 1])
+                        with c_title:
+                            st.markdown(f"**Job #{idx+1}**")
+                        with c_badge:
+                            st.markdown(badge_html, unsafe_allow_html=True)
+                            
+                        st.markdown(f"<div style='font-size:0.85rem; color:#636D5F; margin-bottom: 0.5rem;'>{job['preview']}</div>", unsafe_allow_html=True)
+                        
+                        # Action buttons for this card
+                        c1, c2, c3 = st.columns([1, 1, 1])
+                        with c1:
+                            if st.button("▶ Run", key=f"gen_{card_id}", disabled=(status == "Processing"), use_container_width=True):
+                                if not api_key:
+                                    st.error("Enter API Key in sidebar first.")
+                                else:
+                                    job["status"] = "Processing"
+                                    job["error"] = None
+                                    job_mgr.submit_job(
+                                        job_id=card_id,
+                                        jd_text=job["jd_text"],
+                                        provider=provider,
+                                        api_key=api_key,
+                                        cheaper_model=cheaper_model,
+                                        premium_model=premium_model,
+                                        base_resume_latex=st.session_state.base_resume_latex,
+                                        sender_email=sender_email,
+                                        gmail_app_password=gmail_app_password,
+                                        auto_create_draft=auto_create_draft,
+                                        download_dir=download_dir
+                                    )
+                                    st.rerun()
+                        with c2:
+                            with st.popover("◎ Details", use_container_width=True):
+                                st.text_area("Full Job Description", value=job["jd_text"], height=300, disabled=True, key=f"jd_text_view_{card_id}")
+                        with c3:
+                            if st.button("✕ Del", key=f"del_{card_id}", use_container_width=True):
+                                st.session_state.queue.pop(idx)
+                                st.toast("Removed job from queue")
+                                st.rerun()
+                                
+                        if job.get("error") and is_admin_mode:
+                            st.error(f"Error: {job['error']}")
+
+                if job_completed_now:
+                    st.rerun()
+
+    render_queue_status()
+
+def render_tailored_outputs():
+    st.header("Tailored Output & Files")
+    
+    if not st.session_state.applications:
+        st.markdown(
+            """
+            <div style="text-align: center; padding: 80px 20px; color: #636D5F;">
+                <h3 style="margin: 0 0 8px 0; color: #141813; font-weight: 700; font-size: 1.5rem;">No Active Workspaces</h3>
+                <p style="margin: 0 auto; max-width: 420px; font-size: 0.95rem; color: #636D5F; line-height: 1.6;">
+                    Paste a Job Description on the left and click <b>Queue & Run</b>. Your customized resumes and cover emails will appear here.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        apps_dict = st.session_state.applications
+        app_keys = list(apps_dict.keys())
+        
+        hdr_col1, hdr_col2 = st.columns([3, 1])
+        with hdr_col1:
+            st.markdown(f"##### ● Active Workspaces ({len(app_keys)})")
+        with hdr_col2:
+            if st.button("✕ Clear All", key="clear_all_workspaces", use_container_width=True, help="Clear all generated workspaces"):
+                st.session_state.applications = {}
+                st.session_state.selected_tab = None
+                st.toast("Cleared all workspaces")
+                st.rerun()
                 
-                hdr_col1, hdr_col2 = st.columns([3, 1])
-                with hdr_col1:
-                    st.markdown(f"##### ● Active Workspaces ({len(app_keys)})")
-                with hdr_col2:
-                    if st.button("✕ Clear All", key="clear_all_workspaces", use_container_width=True, help="Clear all generated workspaces"):
-                        st.session_state.applications = {}
-                        st.session_state.selected_tab = None
-                        st.toast("Cleared all workspaces")
+        st.markdown('<div class="workspace-scroll-marker"></div>', unsafe_allow_html=True)
+        
+        cols = st.columns(len(app_keys))
+        for index, key in enumerate(app_keys):
+            app = apps_dict[key]
+            is_active = (st.session_state.selected_tab == key)
+            
+            with cols[index]:
+                with st.container(border=True):
+                    if is_active:
+                        st.markdown('<div class="active-workspace-card"></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div class="inactive-workspace-card"></div>', unsafe_allow_html=True)
+                    
+                    st.markdown(f"**{app['company']}**")
+                    st.markdown(f"<div style='font-size:0.8rem; color:#636D5F; margin-bottom:0.6rem; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;'>{app['job_title']}</div>", unsafe_allow_html=True)
+                    
+                    compile_error = app.get("compile_error")
+                    pdf_bytes = app.get("pdf_bytes")
+                    is_base_fallback = app.get("is_base_fallback", False)
+                    if is_base_fallback:
+                        st.markdown('<span class="badge badge-pending" title="Base resume PDF attached (tailored LaTeX had compile issues)">Base PDF Attached</span>', unsafe_allow_html=True)
+                    elif pdf_bytes:
+                        st.markdown('<span class="badge badge-done">Completed</span>', unsafe_allow_html=True)
+                    elif compile_error:
+                        st.markdown('<span class="badge badge-error">PDF Error</span>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<span class="badge badge-pending">Processing</span>' if not pdf_bytes else '<span class="badge badge-done">Completed</span>', unsafe_allow_html=True)
+                    
+                    st.markdown("<div style='margin-top:0.6rem;'></div>", unsafe_allow_html=True)
+                    st.markdown('<div class="card-buttons-wrapper"></div>', unsafe_allow_html=True)
+                    
+                    if st.button("View ➔", key=f"tab_sel_{key}", use_container_width=False, type="primary" if is_active else "secondary"):
+                        st.session_state.selected_tab = key
                         st.rerun()
                         
-                st.markdown('<div class="workspace-scroll-marker"></div>', unsafe_allow_html=True)
+                    if st.button("✕", key=f"tab_cls_{key}", use_container_width=False, help="Close Workspace"):
+                        del st.session_state.applications[key]
+                        remaining_keys = list(st.session_state.applications.keys())
+                        if remaining_keys:
+                            st.session_state.selected_tab = remaining_keys[0]
+                        else:
+                            st.session_state.selected_tab = None
+                        st.toast("Workspace closed")
+                        st.rerun()
+        
+        # Display the active tab content
+        active_key = st.session_state.selected_tab
+        if (not active_key or active_key not in apps_dict) and app_keys:
+            active_key = app_keys[-1]
+            st.session_state.selected_tab = active_key
+            
+        if active_key in apps_dict:
+            app = apps_dict[active_key]
+            
+            st.markdown("---")
+            
+            # --- UNIFIED TOP HEADER ---
+            c_hdr1, c_hdr2 = st.columns([2, 1])
+            with c_hdr1:
+                st.subheader(f"{app.get('job_title', 'Role')} at {app.get('company', 'Company')}")
+                st.caption(f"Location: **{app.get('location', 'N/A')}** | Phone: **{app.get('phone', 'N/A')}**")
+            with c_hdr2:
+                if st.button("✕ Close Workspace", key=f"close_act_{active_key}", use_container_width=True):
+                    del st.session_state.applications[active_key]
+                    rem = list(st.session_state.applications.keys())
+                    st.session_state.selected_tab = rem[0] if rem else None
+                    st.rerun()
+            
+            st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
+            
+            # --- UNIFIED EMAIL & RESUME SIDE-BY-SIDE PANELS ---
+            col_bottom_left, col_bottom_right = st.columns([1, 1.1])
+            
+            with col_bottom_left:
+                st.markdown("### Cover Email & Outreach")
                 
-                cols = st.columns(len(app_keys))
-                for index, key in enumerate(app_keys):
-                    app = apps_dict[key]
-                    is_active = (st.session_state.selected_tab == key)
+                # Status indicator banner
+                is_sent = app.get("email_sent", False)
+                is_drafted = app.get("draft_created_in_gmail", False)
+                draft_status_text = app.get("draft_status", "Draft ready locally")
+                
+                if is_sent:
+                    st.success(f"● Email Sent to {app['email']} at {app.get('sent_time', '')}")
+                elif is_drafted:
+                    st.info("● Draft ready in Gmail Drafts with resume attached.")
+                    st.link_button("Open Gmail Drafts ➔", "https://mail.google.com/mail/u/0/#drafts", use_container_width=True)
+                else:
+                    if any(w in draft_status_text.lower() for w in ["warning", "error", "failed", "configure", "invalid"]):
+                        st.warning(f"● {draft_status_text}")
+                    else:
+                        st.caption(f"Status: {draft_status_text}")
+                
+                # Unified Recipient, Location, Subject, and Body fields
+                edited_to = st.text_input("Recipient Email (To:)", value=app.get("email", ""), key=f"recip_email_{app['id']}")
+                edited_loc = st.text_input("Job Location", value=app.get("location", ""), key=f"loc_val_{app['id']}")
+                edited_subject = st.text_input("Subject Line", value=app.get("subject", ""), key=f"sub_input_{app['id']}")
+                edited_body = st.text_area("Email Body (Edit here if needed)", value=app.get("email_body", ""), height=220, key=f"body_input_{app['id']}")
+                
+                # Sync edits to state
+                if (edited_to != app.get("email") or edited_loc != app.get("location") or 
+                    edited_subject != app.get("subject") or edited_body != app.get("email_body")):
+                    st.session_state.applications[active_key]["email"] = edited_to
+                    st.session_state.applications[active_key]["location"] = edited_loc
+                    st.session_state.applications[active_key]["subject"] = edited_subject
+                    st.session_state.applications[active_key]["email_body"] = edited_body
+                
+                # Attachment status
+                current_pdf = app.get("pdf_bytes")
+                is_base_fallback = app.get("is_base_fallback", False)
+                if current_pdf:
+                    pdf_size_kb = len(current_pdf) / 1024
+                    if is_base_fallback:
+                        st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *(Base Fallback, {pdf_size_kb:.1f} KB)*")
+                        st.caption("ℹ️ Tailored LaTeX had compilation errors, so the clean base resume PDF was attached to the draft. You can edit the LaTeX on the right and click ⟳ Recompile PDF.")
+                    else:
+                        st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *({pdf_size_kb:.1f} KB)*")
+                else:
+                    st.markdown("Attachment: `PDF pending compilation`")
                     
-                    with cols[index]:
-                        with st.container(border=True):
-                            if is_active:
-                                st.markdown('<div class="active-workspace-card"></div>', unsafe_allow_html=True)
-                            else:
-                                st.markdown('<div class="inactive-workspace-card"></div>', unsafe_allow_html=True)
-                            
-                            st.markdown(f"**{app['company']}**")
-                            st.markdown(f"<div style='font-size:0.8rem; color:#636D5F; margin-bottom:0.6rem; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;'>{app['job_title']}</div>", unsafe_allow_html=True)
-                            
-                            compile_error = app.get("compile_error")
-                            pdf_bytes = app.get("pdf_bytes")
-                            is_base_fallback = app.get("is_base_fallback", False)
-                            if is_admin and is_base_fallback:
-                                st.markdown('<span class="badge badge-pending" title="Base resume PDF attached (tailored LaTeX had compile issues)">Base PDF Attached</span>', unsafe_allow_html=True)
-                            elif pdf_bytes:
-                                st.markdown('<span class="badge badge-done">Completed</span>', unsafe_allow_html=True)
-                            elif is_admin and compile_error:
-                                st.markdown('<span class="badge badge-error">PDF Error</span>', unsafe_allow_html=True)
-                            else:
-                                st.markdown('<span class="badge badge-pending">Processing</span>' if not pdf_bytes else '<span class="badge badge-done">Completed</span>', unsafe_allow_html=True)
-                            
-                            st.markdown("<div style='margin-top:0.6rem;'></div>", unsafe_allow_html=True)
-                            st.markdown('<div class="card-buttons-wrapper"></div>', unsafe_allow_html=True)
-                            
-                            if st.button("View ➔", key=f"tab_sel_{key}", use_container_width=False, type="primary" if is_active else "secondary"):
-                                st.session_state.selected_tab = key
-                                st.rerun()
-                                
-                            if st.button("✕", key=f"tab_cls_{key}", use_container_width=False, help="Close Workspace"):
-                                del st.session_state.applications[key]
-                                remaining_keys = list(st.session_state.applications.keys())
-                                if remaining_keys:
-                                    st.session_state.selected_tab = remaining_keys[0]
+                st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+                
+                # Action Buttons: Send & Update Draft
+                btn_send_col, btn_draft_col = st.columns([1.3, 1])
+                
+                with btn_send_col:
+                    if st.button("✉ Send Email", key=f"send_smtp_{app['id']}", use_container_width=True, type="primary"):
+                        if not gmail_app_password:
+                            st.error("Please configure your Gmail App Password in Secrets / Sidebar to send emails.")
+                        elif not edited_to or edited_to == "N/A" or "@" not in edited_to:
+                            st.error("Please provide a valid recipient email address in the 'Recipient Email' field.")
+                        else:
+                            with st.spinner(f"Sending email directly to {edited_to}..."):
+                                send_ok, send_msg = send_email_smtp(
+                                    sender_email=sender_email,
+                                    app_password=gmail_app_password,
+                                    recipient_email=edited_to,
+                                    subject=edited_subject,
+                                    body=edited_body,
+                                    pdf_bytes=current_pdf,
+                                    pdf_filename="Hemanth_swarna_ resume.pdf"
+                                )
+                                if send_ok:
+                                    st.session_state.applications[active_key]["email_sent"] = True
+                                    st.session_state.applications[active_key]["sent_time"] = datetime.datetime.now().strftime("%I:%M %p")
+                                    update_application_status(app.get("company", ""), app.get("job_title", ""), "Sent")
+                                    st.toast(f"Email sent successfully to {edited_to}")
+                                    st.rerun()
                                 else:
-                                    st.session_state.selected_tab = None
-                                st.toast("Workspace closed")
-                                st.rerun()
+                                    st.error(send_msg)
+                                    
+                with btn_draft_col:
+                    if st.button("✉ Sync to Gmail Drafts", key=f"save_gmail_draft_{app['id']}", use_container_width=True):
+                        if not gmail_app_password:
+                            st.error("Please configure GMAIL_APP_PASSWORD in Streamlit Secrets.")
+                        else:
+                            with st.spinner("Uploading draft to Gmail..."):
+                                draft_ok, draft_msg = save_to_gmail_drafts(
+                                    sender_email=sender_email,
+                                    app_password=gmail_app_password,
+                                    recipient_email=edited_to,
+                                    subject=edited_subject,
+                                    body=edited_body,
+                                    pdf_bytes=current_pdf,
+                                    pdf_filename="Hemanth_swarna_ resume.pdf"
+                                )
+                                if draft_ok:
+                                    st.session_state.applications[active_key]["draft_created_in_gmail"] = True
+                                    st.session_state.applications[active_key]["draft_status"] = "Saved in Gmail Drafts"
+                                    update_application_status(app.get("company", ""), app.get("job_title", ""), "Drafted")
+                                    st.toast("Draft saved in Gmail Drafts")
+                                    st.rerun()
+                                else:
+                                    st.error(draft_msg)
                 
-                # Display the active tab content
-                active_key = st.session_state.selected_tab
+                with st.expander("View Raw Text ➔", expanded=False):
+                    st.markdown("**Subject:**")
+                    st.code(edited_subject, language="text")
+                    st.markdown("**Body:**")
+                    st.code(edited_body, language="text")
                 
-                # If active_key is not in application keys (e.g. deleted), select another
-                if active_key not in apps_dict and app_keys:
-                    active_key = app_keys[0]
-                    st.session_state.selected_tab = active_key
-                    
-                if active_key in apps_dict:
-                    app = apps_dict[active_key]
-                    
-                    st.markdown("---")
-                    
-                    # --- UNIFIED TOP HEADER ---
-                    c_hdr1, c_hdr2 = st.columns([2, 1])
-                    with c_hdr1:
-                        st.subheader(f"{app.get('job_title', 'Role')} at {app.get('company', 'Company')}")
-                        st.caption(f"Location: **{app.get('location', 'N/A')}** | Phone: **{app.get('phone', 'N/A')}**")
-                    with c_hdr2:
-                        if st.button("✕ Close Workspace", key=f"close_act_{active_key}", use_container_width=True):
-                            del st.session_state.applications[active_key]
-                            rem = list(st.session_state.applications.keys())
-                            st.session_state.selected_tab = rem[0] if rem else None
+            with col_bottom_right:
+                st.markdown("### Tailored LaTeX Resume")
+                
+                # Let user view/edit LaTeX source
+                edited_latex = st.text_area(
+                    "LaTeX Source Code",
+                    value=app.get("latex_content", ""),
+                    height=480,
+                    key=f"tex_edit_{app['id']}"
+                )
+                
+                # Update LaTeX source in state if changed
+                if edited_latex != app.get("latex_content"):
+                    st.session_state.applications[active_key]["latex_content"] = edited_latex
+                
+                # Action Buttons
+                st.markdown("##### Resume Actions")
+                
+                btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1, 1])
+                
+                with btn_c1:
+                    if st.button("⟳ Recompile PDF", key=f"recomp_{app['id']}", use_container_width=True):
+                        with st.spinner("Re-compiling PDF..."):
+                            pdf_b, comp_err = compile_latex(edited_latex)
+                            if pdf_b:
+                                st.session_state.applications[active_key]["pdf_bytes"] = pdf_b
+                                st.session_state.applications[active_key]["compile_error"] = None
+                                st.session_state.applications[active_key]["is_base_fallback"] = False
+                                st.toast("PDF successfully recompiled")
+                            else:
+                                st.session_state.applications[active_key]["compile_error"] = comp_err
+                                st.toast("Compilation encountered an issue")
+                            if download_dir and pdf_b:
+                                save_files_locally(
+                                    latex_content=edited_latex,
+                                    pdf_bytes=pdf_b,
+                                    company=app.get("company", "Company"),
+                                    download_dir=download_dir
+                                )
                             st.rerun()
+                            
+                with btn_c2:
+                    st.download_button(
+                        label="↓ Download .tex",
+                        data=app.get("latex_content", ""),
+                        file_name="Hemanth_swarna_ resume.tex",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
                     
-                    st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
-                    
-                    # --- UNIFIED EMAIL & RESUME SIDE-BY-SIDE PANELS ---
-                    col_bottom_left, col_bottom_right = st.columns([1, 1.1])
-                    
-                    with col_bottom_left:
-                        st.markdown("### Cover Email & Outreach")
-                        
-                        # Status indicator banner
-                        is_sent = app.get("email_sent", False)
-                        is_drafted = app.get("draft_created_in_gmail", False)
-                        draft_status_text = app.get("draft_status", "Draft ready locally")
-                        
-                        if is_sent:
-                            st.success(f"● Email Sent to {app['email']} at {app.get('sent_time', '')}")
-                        elif is_drafted:
-                            st.info("● Draft ready in Gmail Drafts with resume attached.")
-                            st.link_button("Open Gmail Drafts ➔", "https://mail.google.com/mail/u/0/#drafts", use_container_width=True)
-                        else:
-                            if any(w in draft_status_text.lower() for w in ["warning", "error", "failed", "configure", "invalid"]):
-                                st.warning(f"● {draft_status_text}")
-                            else:
-                                st.caption(f"Status: {draft_status_text}")
-                        
-                        # Unified Recipient, Location, Subject, and Body fields
-                        edited_to = st.text_input("Recipient Email (To:)", value=app.get("email", ""), key=f"recip_email_{app['id']}")
-                        edited_loc = st.text_input("Job Location", value=app.get("location", ""), key=f"loc_val_{app['id']}")
-                        edited_subject = st.text_input("Subject Line", value=app.get("subject", ""), key=f"sub_input_{app['id']}")
-                        edited_body = st.text_area("Email Body (Edit here if needed)", value=app.get("email_body", ""), height=220, key=f"body_input_{app['id']}")
-                        
-                        # Sync edits to state
-                        if (edited_to != app.get("email") or edited_loc != app.get("location") or 
-                            edited_subject != app.get("subject") or edited_body != app.get("email_body")):
-                            st.session_state.applications[active_key]["email"] = edited_to
-                            st.session_state.applications[active_key]["location"] = edited_loc
-                            st.session_state.applications[active_key]["subject"] = edited_subject
-                            st.session_state.applications[active_key]["email_body"] = edited_body
-                        
-                        # Attachment status
-                        current_pdf = app.get("pdf_bytes")
-                        is_base_fallback = app.get("is_base_fallback", False)
-                        if current_pdf:
-                            pdf_size_kb = len(current_pdf) / 1024
-                            if is_admin and is_base_fallback:
-                                st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *(Base Fallback, {pdf_size_kb:.1f} KB)*")
-                                st.caption("ℹ️ Tailored LaTeX had compilation errors, so the clean base resume PDF was attached to the draft. You can edit the LaTeX on the right and click ⟳ Recompile PDF.")
-                            else:
-                                st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *({pdf_size_kb:.1f} KB)*")
-                        else:
-                            st.markdown("Attachment: `PDF pending compilation`")
-                            
-                        st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
-                        
-                        # Action Buttons: Send & Update Draft
-                        btn_send_col, btn_draft_col = st.columns([1.3, 1])
-                        
-                        with btn_send_col:
-                            if st.button("✉ Send Email", key=f"send_smtp_{app['id']}", use_container_width=True, type="primary"):
-                                if not gmail_app_password:
-                                    st.error("Please configure your Gmail App Password in Secrets / Sidebar to send emails.")
-                                elif not edited_to or edited_to == "N/A" or "@" not in edited_to:
-                                    st.error("Please provide a valid recipient email address in the 'Recipient Email' field.")
-                                else:
-                                    with st.spinner(f"Sending email directly to {edited_to}..."):
-                                        send_ok, send_msg = send_email_smtp(
-                                            sender_email=sender_email,
-                                            app_password=gmail_app_password,
-                                            recipient_email=edited_to,
-                                            subject=edited_subject,
-                                            body=edited_body,
-                                            pdf_bytes=current_pdf,
-                                            pdf_filename="Hemanth_swarna_ resume.pdf"
-                                        )
-                                        if send_ok:
-                                            st.session_state.applications[active_key]["email_sent"] = True
-                                            st.session_state.applications[active_key]["sent_time"] = datetime.datetime.now().strftime("%I:%M %p")
-                                            update_application_status(app.get("company", ""), app.get("job_title", ""), "Sent")
-                                            st.toast(f"Email sent successfully to {edited_to}")
-                                            st.rerun()
-                                        else:
-                                            st.error(send_msg)
-                                            
-                        with btn_draft_col:
-                            if st.button("✉ Sync to Gmail Drafts", key=f"save_gmail_draft_{app['id']}", use_container_width=True):
-                                if not gmail_app_password:
-                                    st.error("Please configure GMAIL_APP_PASSWORD in Streamlit Secrets.")
-                                else:
-                                    with st.spinner("Uploading draft to Gmail..."):
-                                        draft_ok, draft_msg = save_to_gmail_drafts(
-                                            sender_email=sender_email,
-                                            app_password=gmail_app_password,
-                                            recipient_email=edited_to,
-                                            subject=edited_subject,
-                                            body=edited_body,
-                                            pdf_bytes=current_pdf,
-                                            pdf_filename="Hemanth_swarna_ resume.pdf"
-                                        )
-                                        if draft_ok:
-                                            st.session_state.applications[active_key]["draft_created_in_gmail"] = True
-                                            st.session_state.applications[active_key]["draft_status"] = "Saved in Gmail Drafts"
-                                            update_application_status(app.get("company", ""), app.get("job_title", ""), "Drafted")
-                                            st.toast("Draft saved in Gmail Drafts")
-                                            st.rerun()
-                                        else:
-                                            st.error(draft_msg)
-                        
-                        with st.expander("View Raw Text ➔", expanded=False):
-                            st.markdown("**Subject:**")
-                            st.code(edited_subject, language="text")
-                            st.markdown("**Body:**")
-                            st.code(edited_body, language="text")
-                        
-                    with col_bottom_right:
-                        if is_admin:
-                            st.markdown("### Tailored LaTeX Resume")
-                            
-                            # Let user view/edit LaTeX source
-                            edited_latex = st.text_area(
-                                "LaTeX Source Code",
-                                value=app.get("latex_content", ""),
-                                height=480,
-                                key=f"tex_edit_{app['id']}"
-                            )
-                            
-                            # Update LaTeX source in state if changed
-                            if edited_latex != app.get("latex_content"):
-                                st.session_state.applications[active_key]["latex_content"] = edited_latex
-                            
-                            # Action Buttons
-                            st.markdown("##### Resume Actions")
-                            
-                            btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1, 1])
-                            
-                            with btn_c1:
-                                if st.button("⟳ Recompile PDF", key=f"recomp_{app['id']}", use_container_width=True):
-                                    with st.spinner("Re-compiling PDF..."):
-                                        pdf_b, comp_err = compile_latex(edited_latex)
-                                        if pdf_b:
-                                            st.session_state.applications[active_key]["pdf_bytes"] = pdf_b
-                                            st.session_state.applications[active_key]["compile_error"] = None
-                                            st.session_state.applications[active_key]["is_base_fallback"] = False
-                                            st.toast("PDF successfully recompiled")
-                                        else:
-                                            st.session_state.applications[active_key]["compile_error"] = comp_err
-                                            st.toast("Compilation encountered an issue")
-                                        if download_dir and pdf_b:
-                                            save_files_locally(
-                                                latex_content=edited_latex,
-                                                pdf_bytes=pdf_b,
-                                                company=app.get("company", "Company"),
-                                                download_dir=download_dir
-                                            )
-                                        st.rerun()
-                                        
-                            with btn_c2:
-                                st.download_button(
-                                    label="↓ Download .tex",
-                                    data=app.get("latex_content", ""),
-                                    file_name="Hemanth_swarna_ resume.tex",
-                                    mime="text/plain",
-                                    use_container_width=True
-                                )
-                                
-                            with btn_c3:
-                                pdf_bytes = app.get("pdf_bytes")
-                                if pdf_bytes:
-                                    st.download_button(
-                                        label="↓ Download PDF",
-                                        data=pdf_bytes,
-                                        file_name="Hemanth_swarna_ resume.pdf",
-                                        mime="application/pdf",
-                                        use_container_width=True
-                                    )
-                                else:
-                                    st.button("PDF Pending", disabled=True, use_container_width=True)
-                            
-                            compile_error = app.get("compile_error")
-                            if compile_error:
-                                expander_label = "⚠️ View Tailored Compiler Log (Base PDF was used as fallback) ➔" if app.get("is_base_fallback") else "View Compiler Log ➔"
-                                with st.expander(expander_label, expanded=False):
-                                    st.code(compile_error, language="text")
-                        else:
-                            st.markdown("### Tailored Resume")
-                            pdf_bytes = app.get("pdf_bytes")
-                            if pdf_bytes:
-                                pdf_kb = len(pdf_bytes) / 1024
-                                st.markdown(f"""
-                                <div style="background: #F8FAF7; border: 1px solid #C4DAC0; border-radius: 8px; padding: 20px 16px; margin-bottom: 16px;">
-                                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                                        <div>
-                                            <h4 style="margin: 0 0 4px 0; color: #141D12; font-size: 1.05rem;">📄 Hemanth_swarna_ resume.pdf</h4>
-                                            <p style="margin: 0; color: #4A5B45; font-size: 0.85rem;">Customized PDF resume generated and attached ({pdf_kb:.1f} KB).</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                st.download_button(
-                                    label="↓ Download Tailored Resume (PDF)",
-                                    data=pdf_bytes,
-                                    file_name="Hemanth_swarna_ resume.pdf",
-                                    mime="application/pdf",
-                                    type="primary",
-                                    use_container_width=True
-                                )
-                            else:
-                                st.info("Resume PDF is processing...")
+                with btn_c3:
+                    pdf_bytes = app.get("pdf_bytes")
+                    if pdf_bytes:
+                        st.download_button(
+                            label="↓ Download PDF",
+                            data=pdf_bytes,
+                            file_name="Hemanth_swarna_ resume.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    else:
+                        st.button("PDF Pending", disabled=True, use_container_width=True)
+                
+                compile_error = app.get("compile_error")
+                if compile_error:
+                    expander_label = "⚠️ View Tailored Compiler Log (Base PDF was used as fallback) ➔" if app.get("is_base_fallback") else "View Compiler Log ➔"
+                    with st.expander(expander_label, expanded=False):
+                        st.code(compile_error, language="text")
 
-with main_tabs[1]:
+def render_application_history():
     st.header("Application History")
     st.caption("Retaining activity from the past 7 days (older entries are automatically archived).")
     
-    # Load history database
     log_df = st.session_state.history
     
     if log_df.empty:
         st.info("No applications logged in the database yet.")
     else:
-        # Statistics
         total_logged = len(log_df)
         today_logged = len(log_df[log_df["Date"] == datetime.date.today().strftime("%Y-%m-%d")])
         unique_companies = log_df["Company"].nunique()
@@ -1966,7 +1939,6 @@ with main_tabs[1]:
             
         st.markdown("---")
         
-        # Search & Filter controls
         st.subheader("Search & Filter History")
         filter_col1, filter_col2, filter_col3 = st.columns([2, 1, 1])
         with filter_col1:
@@ -1974,7 +1946,6 @@ with main_tabs[1]:
         with filter_col2:
             status_filter = st.multiselect("Filter by Status", options=list(log_df["Status"].unique()), default=list(log_df["Status"].unique()))
         with filter_col3:
-            # Parse Date column to extract min/max dates
             log_dates = pd.to_datetime(log_df["Date"], errors='coerce').dt.date.dropna()
             min_date = log_dates.min() if not log_dates.empty else datetime.date.today()
             max_date = log_dates.max() if not log_dates.empty else datetime.date.today()
@@ -1989,7 +1960,6 @@ with main_tabs[1]:
                 max_value=max_date
             )
             
-        # Apply filters
         filtered_df = log_df.copy()
         if search_query:
             query = search_query.lower()
@@ -2002,7 +1972,6 @@ with main_tabs[1]:
         if status_filter:
             filtered_df = filtered_df[filtered_df["Status"].isin(status_filter)]
             
-        # Apply date range filter
         if isinstance(date_range, tuple):
             if len(date_range) == 2:
                 start_date, end_date = date_range
@@ -2031,7 +2000,6 @@ with main_tabs[1]:
         st.markdown("---")
         st.subheader("Detailed Contacts Breakdown")
         
-        # Display each application detail in a clean card layout
         for idx, row in filtered_df.iterrows():
             with st.container(border=True):
                 col_d1, col_d2 = st.columns([3, 1])
@@ -2056,3 +2024,35 @@ with main_tabs[1]:
                     st.text_input("Phone Number", value=row["Phone Number"], key=f"hist_phone_{idx}", disabled=True)
                 with c_details3:
                     st.text_input("Location", value=row["Location"], key=f"hist_loc_{idx}", disabled=True)
+
+# ----------------- MAIN DISPLAY ROUTER -----------------
+if is_admin:
+    # Admin metrics row
+    m_col1, m_col2, m_col3 = st.columns(3)
+    with m_col1:
+        st.metric(label="● Active Workspaces", value=total_apps)
+    with m_col2:
+        st.metric(label="● In Queue", value=pending_queue)
+    with m_col3:
+        st.metric(label="● Logged Today", value=apps_today)
+        
+    st.markdown("<div style='margin-bottom: 0.6rem;'></div>", unsafe_allow_html=True)
+    
+    main_tabs = st.tabs(["Tailoring Workspace", "Application History"])
+    
+    with main_tabs[0]:
+        left_col, right_col = st.columns([1, 1.2])
+        with left_col:
+            render_jd_input_and_queue(is_admin_mode=True)
+        with right_col:
+            render_tailored_outputs()
+            
+    with main_tabs[1]:
+        render_application_history()
+
+else:
+    # Standard User View: Clean single-column layout without Tailored Output & Files or History
+    _, center_col, _ = st.columns([0.05, 0.9, 0.05])
+    with center_col:
+        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+        render_jd_input_and_queue(is_admin_mode=False)
