@@ -631,7 +631,8 @@ def create_mime_message(sender_email, recipient_email, subject, body, pdf_bytes=
     """
     msg = MIMEMultipart()
     msg['From'] = sender_email
-    msg['To'] = recipient_email
+    if recipient_email and recipient_email != "N/A" and "@" in recipient_email:
+        msg['To'] = recipient_email
     msg['Subject'] = subject
     msg['Date'] = formatdate(localtime=True)
     msg['Message-ID'] = make_msgid()
@@ -650,20 +651,25 @@ def create_mime_message(sender_email, recipient_email, subject, body, pdf_bytes=
 def save_to_gmail_drafts(sender_email, app_password, recipient_email, subject, body, pdf_bytes=None, pdf_filename="Hemanth_swarna_ resume.pdf"):
     """
     Saves an email draft with attachment to Gmail's '[Gmail]/Drafts' folder via IMAP.
+    Works even if recipient email is not yet available in the JD.
     Returns (success: bool, message: str)
     """
     if not sender_email or not app_password:
-        return False, "Sender email and Gmail App Password are required."
+        return False, "Gmail App Password is not set. Please add GMAIL_APP_PASSWORD in Streamlit Secrets."
         
     clean_password = app_password.replace(" ", "").strip()
     
     try:
-        msg = create_mime_message(sender_email, recipient_email, subject, body, pdf_bytes, pdf_filename)
+        recip = recipient_email if (recipient_email and recipient_email != "N/A" and "@" in recipient_email) else ""
+        msg = create_mime_message(sender_email, recip, subject, body, pdf_bytes, pdf_filename)
         raw_msg = msg.as_bytes()
         
         # Connect to Gmail IMAP
         imap = imaplib.IMAP4_SSL("imap.gmail.com", 993, timeout=20)
-        imap.login(sender_email, clean_password)
+        try:
+            imap.login(sender_email, clean_password)
+        except imaplib.IMAP4.error as auth_err:
+            return False, f"Gmail Login Failed (Invalid App Password). Please generate a new App Password in your Google Account: {str(auth_err)}"
         
         folder_candidates = ['"[Gmail]/Drafts"', 'Drafts', '"[Google Mail]/Drafts"']
         saved = False
@@ -676,6 +682,24 @@ def save_to_gmail_drafts(sender_email, app_password, recipient_email, subject, b
                     break
             except Exception as fe:
                 last_err = str(fe)
+                
+        # If standard candidate names failed, query server for Drafts folder
+        if not saved:
+            try:
+                res, mailboxes = imap.list()
+                if res == "OK":
+                    for box in mailboxes:
+                        box_str = box.decode("utf-8", errors="ignore")
+                        if "draft" in box_str.lower():
+                            parts = box_str.split(' "/" ')
+                            if len(parts) >= 2:
+                                folder_name = parts[1].strip()
+                                res, data = imap.append(folder_name, r'(\Draft)', imaplib.Time2Internaldate(time.time()), raw_msg)
+                                if res == "OK":
+                                    saved = True
+                                    break
+            except Exception as fe2:
+                last_err = str(fe2)
                 
         imap.logout()
         
@@ -909,7 +933,7 @@ www.linkedin.com/in/swarna-hemanth
             draft_status_msg = "Draft ready locally"
             draft_created_in_gmail = False
             
-            if auto_create_draft and gmail_app_password and recipient_email_val and recipient_email_val != "N/A" and "@" in recipient_email_val:
+            if auto_create_draft and gmail_app_password:
                 self._update_progress(job_id, "📬 Uploading draft with PDF to Gmail Drafts...")
                 draft_ok, draft_res = save_to_gmail_drafts(
                     sender_email=sender_email,
@@ -926,7 +950,7 @@ www.linkedin.com/in/swarna-hemanth
                 else:
                     draft_status_msg = f"Draft warning: {draft_res}"
             elif not gmail_app_password:
-                draft_status_msg = "Draft ready locally (Enter Gmail App Password in sidebar to sync to Gmail)"
+                draft_status_msg = "Draft ready locally (Configure GMAIL_APP_PASSWORD in Secrets / Sidebar to sync to Gmail)"
                 
             # Log in contact log CSV
             log_application(
