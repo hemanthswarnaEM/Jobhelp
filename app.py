@@ -790,10 +790,19 @@ class BackgroundJobManager:
             3. 'location': The job location / work arrangement (e.g., 'New York, NY (Hybrid)', 'Remote', 'Dallas, TX', 'Austin, TX (Onsite)'). If none found, write 'N/A'.
             4. 'company': The client or vendor company name. If none, write 'N/A'.
             5. 'job_title': The official job title. If none, write 'N/A'.
-            6. 'subject': A professional email subject line for the job application that INCLUDES the extracted location if available. Format MUST be:
-               - If location is available: 'Application for [Job Title] - [Location] - Hemanth Swarna' (e.g., 'Application for Senior Data Scientist - New York, NY (Hybrid) - Hemanth Swarna' or 'Application for Lead ML Engineer - Remote - Hemanth Swarna').
-               - If location is N/A: 'Application for [Job Title] - Hemanth Swarna'.
-            7. 'email_body': A short, clear, and compelling cover email body explaining why Hemanth Swarna is a great fit. Highlight relevant skills from his background: 12+ years exp, GenAI (RAG, AWS Bedrock, LangGraph, Llama index), Machine Learning, and Big Data.
+            6. 'subject': A professional email subject line for the job application that INCLUDES the extracted location if available. Do NOT include the applicant's name in the subject line. Format MUST be:
+               - If location is available: 'Application for [Job Title] - [Location]' (e.g., 'Application for Senior Data Scientist - New York, NY (Hybrid)' or 'Application for Lead ML Engineer - Remote').
+               - If location is N/A: 'Application for [Job Title]'.
+            7. 'email_body': A short, clear, and compelling cover email body following this EXACT format:
+
+Dear [Recruiter Name if mentioned in JD, otherwise 'Recruiting Team'],
+
+[1-2 clear, punchy paragraphs explaining why Hemanth Swarna is an exceptional fit for the [Job Title] position. Highlight relevant skills matching the JD from his background: 12+ years experience, GenAI (RAG, AWS Bedrock, LangGraph, LlamaIndex), Machine Learning, and Big Data.]
+
+Hemanth Swarna
+hemanthswarna3838@gmail.com
+2139866016
+www.linkedin.com/in/swarna-hemanth
             
             Ensure the JSON output is well-formed.
             
@@ -818,12 +827,36 @@ class BackgroundJobManager:
             job_title_val = metadata.get("job_title", "N/A")
             recipient_email_val = metadata.get("email", "N/A")
             location_val = metadata.get("location", "N/A")
-            subject_val = metadata.get("subject", f"Application for {job_title_val} - Hemanth Swarna")
-            email_body_val = metadata.get("email_body", "")
             
-            # Post-process subject line to guarantee location inclusion if valid
-            if location_val and location_val != "N/A" and location_val.lower() not in subject_val.lower():
-                subject_val = f"Application for {job_title_val} - {location_val} - Hemanth Swarna"
+            # Post-process subject line: Remove any candidate name and ensure clean location format
+            subject_val = metadata.get("subject", "").strip()
+            subject_val = re.sub(r'[\s\-–—|,:]*(?:Hemanth\s*Swarna|Hemanth).*$', '', subject_val, flags=re.IGNORECASE).strip()
+            if not subject_val or subject_val == "N/A":
+                if location_val and location_val != "N/A":
+                    subject_val = f"Application for {job_title_val} - {location_val}"
+                else:
+                    subject_val = f"Application for {job_title_val}"
+            elif location_val and location_val != "N/A" and location_val.lower() not in subject_val.lower():
+                subject_val = f"{subject_val} - {location_val}"
+                
+            # Post-process email body: Enforce standard signature structure
+            email_body_val = metadata.get("email_body", "").strip()
+            standard_signature = (
+                "Hemanth Swarna\n"
+                "hemanthswarna3838@gmail.com\n"
+                "2139866016\n"
+                "www.linkedin.com/in/swarna-hemanth"
+            )
+            
+            # Ensure the standardized signature is always present at the end
+            if "2139866016" not in email_body_val or "www.linkedin.com/in/swarna-hemanth" not in email_body_val:
+                body_cleaned = re.sub(
+                    r'(?:(?:Best|Warm|Kind)?\s*regards|Sincerely|Thanks|Thank you|Best)[\s,]*\n*(?:Hemanth\s*Swarna|Hemanth)?.*$',
+                    '',
+                    email_body_val,
+                    flags=re.IGNORECASE
+                ).strip()
+                email_body_val = f"{body_cleaned}\n\n{standard_signature}"
                 
             # --- STEP 2: TAILOR RESUME IN LATEX ---
             self._update_progress(job_id, "✍️ Tailoring LaTeX resume with target JD keywords...")
