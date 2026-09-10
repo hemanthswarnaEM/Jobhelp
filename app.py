@@ -807,7 +807,7 @@ class BackgroundJobManager:
                           base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir):
         try:
             # --- STEP 1: EXTRACT METADATA, LOCATION & WRITE COVER EMAIL ---
-            self._update_progress(job_id, "📍 Extracting contact info, location & composing email...")
+            self._update_progress(job_id, "Processing...")
             
             metadata_extraction_prompt = f"""
             Analyze the following Job Description (JD) and extract the contact/vendor information, location, and write a cover email.
@@ -890,7 +890,7 @@ www.linkedin.com/in/swarna-hemanth
             email_body_val = f"{body_cleaned}\n\n{standard_signature}"
                 
             # --- STEP 2: TAILOR RESUME IN LATEX ---
-            self._update_progress(job_id, "✍️ Tailoring LaTeX resume with target JD keywords...")
+            self._update_progress(job_id, "Processing...")
             
             resume_editor_prompt = f"""
             You are a professional resume editor. Take the base resume in LaTeX form and the target JD below.
@@ -923,20 +923,20 @@ www.linkedin.com/in/swarna-hemanth
             latex_content = extract_latex_from_response(resume_raw)
             
             # --- STEP 3: COMPILE PDF (WITH BASE RESUME FALLBACK) ---
-            self._update_progress(job_id, "⚙️ Compiling PDF resume...")
+            self._update_progress(job_id, "Processing...")
             pdf_bytes, compile_err = compile_latex(latex_content)
             is_base_fallback = False
             
             # If tailored LaTeX compilation had an issue, automatically fall back to base resume PDF for draft
             if not pdf_bytes:
-                self._update_progress(job_id, "⚠️ Tailored PDF compile issue. Compiling base resume for draft...")
+                self._update_progress(job_id, "Processing...")
                 base_pdf_bytes, _ = compile_latex(base_resume_latex)
                 if base_pdf_bytes:
                     pdf_bytes = base_pdf_bytes
                     is_base_fallback = True
             
             # --- STEP 4: AUTO-SAVE LOCALLY ---
-            self._update_progress(job_id, "💾 Auto-saving files locally & logging database...")
+            self._update_progress(job_id, "Processing...")
             if download_dir and pdf_bytes:
                 save_files_locally(
                     latex_content=latex_content,
@@ -950,7 +950,7 @@ www.linkedin.com/in/swarna-hemanth
             draft_created_in_gmail = False
             
             if auto_create_draft and gmail_app_password:
-                self._update_progress(job_id, "📬 Uploading draft with PDF to Gmail Drafts...")
+                self._update_progress(job_id, "Processing...")
                 draft_ok, draft_res = save_to_gmail_drafts(
                     sender_email=sender_email,
                     app_password=gmail_app_password,
@@ -1473,7 +1473,7 @@ with main_tabs[0]:
                             "jd_text": new_jd,
                             "preview": preview_title,
                             "status": "Processing",
-                            "progress": "Submitting to worker...",
+                            "progress": "",
                             "error": None
                         })
                         
@@ -1494,7 +1494,7 @@ with main_tabs[0]:
                         # Immediately clear input & increment counter so text area is 100% empty and ready for next JD
                         st.session_state.current_jd_input = ""
                         st.session_state.jd_input_counter += 1
-                        st.toast("Job processing in background")
+                        st.toast("Application queued")
                         st.rerun()
                 else:
                     st.error("Please paste a job description first.")
@@ -1530,7 +1530,7 @@ with main_tabs[0]:
                 else:
                     for pj in pending_jobs:
                         pj["status"] = "Processing"
-                        pj["progress"] = "Submitting to worker..."
+                        pj["progress"] = ""
                         pj["error"] = None
                         job_mgr.submit_job(
                             job_id=pj["id"],
@@ -1572,7 +1572,6 @@ with main_tabs[0]:
                                     st.session_state.applications[card_id] = bg["result"]
                         
                         status = job["status"]
-                        progress_msg = job.get("progress", "")
                         
                         # Badge styles
                         if status == "Pending":
@@ -1594,10 +1593,6 @@ with main_tabs[0]:
                                 st.markdown(badge_html, unsafe_allow_html=True)
                                 
                             st.markdown(f"<div style='font-size:0.85rem; color:#636D5F; margin-bottom: 0.5rem;'>{job['preview']}</div>", unsafe_allow_html=True)
-                            
-                            # Show live progress status line if processing
-                            if status == "Processing" and progress_msg:
-                                st.markdown(f"<div style='font-size:0.8rem; color:#2B5722; font-weight:600; margin-bottom: 0.6rem;'>{progress_msg}</div>", unsafe_allow_html=True)
                             
                             # Action buttons for this card
                             c1, c2, c3 = st.columns([1, 1, 1])
@@ -1688,14 +1683,14 @@ with main_tabs[0]:
                             compile_error = app.get("compile_error")
                             pdf_bytes = app.get("pdf_bytes")
                             is_base_fallback = app.get("is_base_fallback", False)
-                            if is_base_fallback:
+                            if is_admin and is_base_fallback:
                                 st.markdown('<span class="badge badge-pending" title="Base resume PDF attached (tailored LaTeX had compile issues)">Base PDF Attached</span>', unsafe_allow_html=True)
                             elif pdf_bytes:
                                 st.markdown('<span class="badge badge-done">Completed</span>', unsafe_allow_html=True)
-                            elif compile_error:
+                            elif is_admin and compile_error:
                                 st.markdown('<span class="badge badge-error">PDF Error</span>', unsafe_allow_html=True)
                             else:
-                                st.markdown('<span class="badge badge-pending">Pending</span>', unsafe_allow_html=True)
+                                st.markdown('<span class="badge badge-pending">Processing</span>' if not pdf_bytes else '<span class="badge badge-done">Completed</span>', unsafe_allow_html=True)
                             
                             st.markdown("<div style='margin-top:0.6rem;'></div>", unsafe_allow_html=True)
                             st.markdown('<div class="card-buttons-wrapper"></div>', unsafe_allow_html=True)
@@ -1782,7 +1777,7 @@ with main_tabs[0]:
                         is_base_fallback = app.get("is_base_fallback", False)
                         if current_pdf:
                             pdf_size_kb = len(current_pdf) / 1024
-                            if is_base_fallback:
+                            if is_admin and is_base_fallback:
                                 st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *(Base Fallback, {pdf_size_kb:.1f} KB)*")
                                 st.caption("ℹ️ Tailored LaTeX had compilation errors, so the clean base resume PDF was attached to the draft. You can edit the LaTeX on the right and click ⟳ Recompile PDF.")
                             else:
@@ -1852,73 +1847,99 @@ with main_tabs[0]:
                             st.code(edited_body, language="text")
                         
                     with col_bottom_right:
-                        st.markdown("### Tailored LaTeX Resume")
-                        
-                        # Let user view/edit LaTeX source
-                        edited_latex = st.text_area(
-                            "LaTeX Source Code",
-                            value=app.get("latex_content", ""),
-                            height=480,
-                            key=f"tex_edit_{app['id']}"
-                        )
-                        
-                        # Update LaTeX source in state if changed
-                        if edited_latex != app.get("latex_content"):
-                            st.session_state.applications[active_key]["latex_content"] = edited_latex
-                        
-                        # Action Buttons
-                        st.markdown("##### Resume Actions")
-                        
-                        btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1, 1])
-                        
-                        with btn_c1:
-                            if st.button("⟳ Recompile PDF", key=f"recomp_{app['id']}", use_container_width=True):
-                                with st.spinner("Re-compiling PDF..."):
-                                    pdf_b, comp_err = compile_latex(edited_latex)
-                                    if pdf_b:
-                                        st.session_state.applications[active_key]["pdf_bytes"] = pdf_b
-                                        st.session_state.applications[active_key]["compile_error"] = None
-                                        st.session_state.applications[active_key]["is_base_fallback"] = False
-                                        st.toast("PDF successfully recompiled")
-                                    else:
-                                        st.session_state.applications[active_key]["compile_error"] = comp_err
-                                        st.toast("Compilation encountered an issue")
-                                    if download_dir and pdf_b:
-                                        save_files_locally(
-                                            latex_content=edited_latex,
-                                            pdf_bytes=pdf_b,
-                                            company=app.get("company", "Company"),
-                                            download_dir=download_dir
-                                        )
-                                    st.rerun()
-                                    
-                        with btn_c2:
-                            st.download_button(
-                                label="↓ Download .tex",
-                                data=app.get("latex_content", ""),
-                                file_name="Hemanth_swarna_ resume.tex",
-                                mime="text/plain",
-                                use_container_width=True
+                        if is_admin:
+                            st.markdown("### Tailored LaTeX Resume")
+                            
+                            # Let user view/edit LaTeX source
+                            edited_latex = st.text_area(
+                                "LaTeX Source Code",
+                                value=app.get("latex_content", ""),
+                                height=480,
+                                key=f"tex_edit_{app['id']}"
                             )
                             
-                        with btn_c3:
+                            # Update LaTeX source in state if changed
+                            if edited_latex != app.get("latex_content"):
+                                st.session_state.applications[active_key]["latex_content"] = edited_latex
+                            
+                            # Action Buttons
+                            st.markdown("##### Resume Actions")
+                            
+                            btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1, 1])
+                            
+                            with btn_c1:
+                                if st.button("⟳ Recompile PDF", key=f"recomp_{app['id']}", use_container_width=True):
+                                    with st.spinner("Re-compiling PDF..."):
+                                        pdf_b, comp_err = compile_latex(edited_latex)
+                                        if pdf_b:
+                                            st.session_state.applications[active_key]["pdf_bytes"] = pdf_b
+                                            st.session_state.applications[active_key]["compile_error"] = None
+                                            st.session_state.applications[active_key]["is_base_fallback"] = False
+                                            st.toast("PDF successfully recompiled")
+                                        else:
+                                            st.session_state.applications[active_key]["compile_error"] = comp_err
+                                            st.toast("Compilation encountered an issue")
+                                        if download_dir and pdf_b:
+                                            save_files_locally(
+                                                latex_content=edited_latex,
+                                                pdf_bytes=pdf_b,
+                                                company=app.get("company", "Company"),
+                                                download_dir=download_dir
+                                            )
+                                        st.rerun()
+                                        
+                            with btn_c2:
+                                st.download_button(
+                                    label="↓ Download .tex",
+                                    data=app.get("latex_content", ""),
+                                    file_name="Hemanth_swarna_ resume.tex",
+                                    mime="text/plain",
+                                    use_container_width=True
+                                )
+                                
+                            with btn_c3:
+                                pdf_bytes = app.get("pdf_bytes")
+                                if pdf_bytes:
+                                    st.download_button(
+                                        label="↓ Download PDF",
+                                        data=pdf_bytes,
+                                        file_name="Hemanth_swarna_ resume.pdf",
+                                        mime="application/pdf",
+                                        use_container_width=True
+                                    )
+                                else:
+                                    st.button("PDF Pending", disabled=True, use_container_width=True)
+                            
+                            compile_error = app.get("compile_error")
+                            if compile_error:
+                                expander_label = "⚠️ View Tailored Compiler Log (Base PDF was used as fallback) ➔" if app.get("is_base_fallback") else "View Compiler Log ➔"
+                                with st.expander(expander_label, expanded=False):
+                                    st.code(compile_error, language="text")
+                        else:
+                            st.markdown("### Tailored Resume")
                             pdf_bytes = app.get("pdf_bytes")
                             if pdf_bytes:
+                                pdf_kb = len(pdf_bytes) / 1024
+                                st.markdown(f"""
+                                <div style="background: #F8FAF7; border: 1px solid #C4DAC0; border-radius: 8px; padding: 20px 16px; margin-bottom: 16px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                        <div>
+                                            <h4 style="margin: 0 0 4px 0; color: #141D12; font-size: 1.05rem;">📄 Hemanth_swarna_ resume.pdf</h4>
+                                            <p style="margin: 0; color: #4A5B45; font-size: 0.85rem;">Customized PDF resume generated and attached ({pdf_kb:.1f} KB).</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
                                 st.download_button(
-                                    label="↓ Download PDF",
+                                    label="↓ Download Tailored Resume (PDF)",
                                     data=pdf_bytes,
                                     file_name="Hemanth_swarna_ resume.pdf",
                                     mime="application/pdf",
+                                    type="primary",
                                     use_container_width=True
                                 )
                             else:
-                                st.button("PDF Pending", disabled=True, use_container_width=True)
-                        
-                        compile_error = app.get("compile_error")
-                        if compile_error:
-                            expander_label = "⚠️ View Tailored Compiler Log (Base PDF was used as fallback) ➔" if app.get("is_base_fallback") else "View Compiler Log ➔"
-                            with st.expander(expander_label, expanded=False):
-                                st.code(compile_error, language="text")
+                                st.info("Resume PDF is processing...")
 
 with main_tabs[1]:
     st.header("Application History")
