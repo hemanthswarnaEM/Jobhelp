@@ -288,6 +288,9 @@ if "selected_tab" not in st.session_state:
 if "current_jd_input" not in st.session_state:
     st.session_state.current_jd_input = ""
 
+if "jd_input_counter" not in st.session_state:
+    st.session_state.jd_input_counter = 0
+
 # ----------------- AUTHENTICATION GATEKEEPER -----------------
 if not st.session_state.authenticated:
     _, col_center, _ = st.columns([1, 1.4, 1])
@@ -773,7 +776,7 @@ class BackgroundJobManager:
     Manages asynchronous, non-blocking execution of resume tailoring,
     PDF compilation, auto-saving, and Gmail draft generation in worker threads.
     """
-    def __init__(self, max_workers=3):
+    def __init__(self, max_workers=5):
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.jobs = {}  # job_id -> {id, status, progress, error, result}
         self.lock = threading.Lock()
@@ -1003,7 +1006,7 @@ www.linkedin.com/in/swarna-hemanth
 
 @st.cache_resource
 def get_job_manager():
-    return BackgroundJobManager(max_workers=3)
+    return BackgroundJobManager(max_workers=5)
 
 # ----------------- DYNAMIC MODEL FETCHER -----------------
 def get_available_models(provider, api_key):
@@ -1386,7 +1389,11 @@ with main_tabs[0]:
         st.header("Job Descriptions Queue")
         
         # File uploader option
-        uploaded_file = st.file_uploader("Upload Job Description (TXT or PDF)", type=["txt", "pdf"])
+        uploaded_file = st.file_uploader(
+            "Upload Job Description (TXT or PDF)", 
+            type=["txt", "pdf"],
+            key=f"jd_uploader_{st.session_state.jd_input_counter}"
+        )
         if uploaded_file is not None:
             try:
                 # Read text
@@ -1403,6 +1410,7 @@ with main_tabs[0]:
                 # Update text area value
                 if new_text and new_text != st.session_state.current_jd_input:
                     st.session_state.current_jd_input = new_text
+                    st.session_state.jd_input_counter += 1
                     st.toast("File text loaded successfully")
                     st.rerun()
             except Exception as e:
@@ -1414,7 +1422,7 @@ with main_tabs[0]:
             value=st.session_state.current_jd_input,
             placeholder="Include job title, company name, recruiter email, phone, location, and requirements...",
             height=200,
-            key="jd_text_area"
+            key=f"jd_text_area_{st.session_state.jd_input_counter}"
         )
         
         # Get Job Manager singleton
@@ -1444,7 +1452,7 @@ with main_tabs[0]:
             if st.button("▶ Queue & Run", use_container_width=True, type="primary"):
                 if new_jd.strip():
                     if not api_key:
-                        st.error("Please enter an API Key in the sidebar first.")
+                        st.error("Please enter an API Key in the sidebar or Secrets first.")
                     else:
                         jd_id = f"job_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(st.session_state.queue) + 1}"
                         lines = [l.strip() for l in new_jd.strip().split("\n") if l.strip()]
@@ -1473,8 +1481,9 @@ with main_tabs[0]:
                             download_dir=download_dir
                         )
                         
-                        # Immediately clear input so user can paste next job right away
+                        # Immediately clear input & increment counter so text area is 100% empty and ready for next JD
                         st.session_state.current_jd_input = ""
+                        st.session_state.jd_input_counter += 1
                         st.toast("Job processing in background")
                         st.rerun()
                 else:
@@ -1495,6 +1504,7 @@ with main_tabs[0]:
                         "error": None
                     })
                     st.session_state.current_jd_input = ""
+                    st.session_state.jd_input_counter += 1
                     st.toast("Added job to queue")
                     st.rerun()
                 else:
