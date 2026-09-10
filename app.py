@@ -350,7 +350,7 @@ if not st.session_state.authenticated:
                     st.session_state.user_role = "admin"
                     st.toast("Signed in as Admin")
                     st.rerun()
-                elif u == "user" and p == "I1tech":
+                elif u == "user" and p == "Remember@1":
                     st.session_state.authenticated = True
                     st.session_state.user_role = "user"
                     st.toast("Signed in successfully")
