@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+.venv/
+venv/
+ENV/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS & Temporary
+.DS_Store
+Thumbs.db
+downloads/
+scratch/
+*.log
+*.pdf
+
+applications_log.csv

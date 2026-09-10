@@ -1,0 +1,275 @@
+\documentclass{article}
+
+% --- YOUR ORIGINAL PACKAGES & FONT ---
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage[
+    ignoreheadfoot,
+    top=1cm, bottom=1cm, left=1cm, right=1cm, footskip=1.0cm,
+]{geometry}
+\usepackage{titlesec}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{enumitem}
+\usepackage{fontawesome5}
+\usepackage{amsmath}
+\usepackage{calc}
+\usepackage[colorlinks=true, urlcolor=black]{hyperref}
+\usepackage{bookmark}
+\usepackage{lastpage}
+\usepackage{changepage}
+\usepackage{paracol}
+\usepackage{ifthen}
+\usepackage{needspace}
+\usepackage{iftex}
+
+% --- THE BORDER LOGIC (LIGHT GRAY BOX AROUND ALL PAGES) ---
+\usepackage{tikz}
+\usepackage[contents={},opacity=1,scale=1,color=gray!25] {background}
+
+\backgroundsetup{
+   position=current page.center,
+   angle=0,
+   % nodeopts={anchor=center},
+   contents={
+      \begin{tikzpicture}[remember picture,overlay]
+         \draw [line width= 0.7 pt, color=black] 
+               ([xshift=0.8cm, yshift=-0.8cm]current page.north west) 
+               rectangle 
+               ([xshift=-0.8cm, yshift=0.8cm]current page.south east);
+      \end{tikzpicture}
+   }
+}
+
+% --- YOUR ORIGINAL STYLES ---
+\definecolor{primaryColor}{RGB}{0, 79, 144}
+\pagestyle{empty}
+\setcounter{secnumdepth}{0}
+\setlength{\parindent}{0pt}
+
+\titleformat{\section}{\needspace{4\baselineskip}\bfseries\large}{}{0pt}{}[\vspace{1pt}\titlerule]
+\titlespacing{\section}{-1pt}{0.4cm}{0.2cm} 
+
+\newenvironment{highlights}{
+    \begin{itemize}[
+        topsep=0.10cm, 
+        parsep=0.08cm, 
+        partopsep=0pt, 
+        itemsep=0.08cm, 
+        leftmargin=0.4cm + 10pt
+    ]
+}{
+    \end{itemize}
+}
+
+\newenvironment{onecolentry}{
+    \begin{adjustwidth}{0.2cm + 0.00001cm}{0.2cm + 0.00001cm}
+}{
+    \end{adjustwidth}
+}
+
+\newenvironment{header}{
+    \vspace*{-0.5cm}
+    \centering\linespread{1.2}
+}{
+    \vspace{-0.2cm}
+}
+
+\hypersetup{
+    pdftitle={Hemanth Swarna's CV},
+    pdfauthor={Hemanth Swarna}
+}
+
+\let\hrefWithoutArrow\href
+
+\begin{document}
+
+% HEADER
+\begin{header}
+    \textbf{\fontsize{20pt}{20pt}\selectfont Hemanth Swarna}
+
+    \vspace{0.15cm}
+    {\large Senior Data Scientist | Gen AI Expert}
+    \vspace{0.15cm}
+
+    \begin{center}
+        {\footnotesize
+            \hrefWithoutArrow{mailto:hemanthswarna3838@gmail.com}{\faEnvelope[regular] \hspace{0.08cm}hemanthswarna3838@gmail.com}
+            \quad
+            \hrefWithoutArrow{tel:+12139866016}{\faPhone* \hspace{0.08cm}+1 (213) 986-6016}
+            \quad
+            \hrefWithoutArrow{https://www.linkedin.com/in/swarna-hemanth}{\faLinkedinIn \hspace{0.08cm}hemanth-swarna}
+        }
+    \end{center}
+\end{header}
+
+\vspace{-0.2cm}
+
+\section{Professional Summary}
+\begin{onecolentry}
+    \begin{highlights}
+        \item Dynamic and highly skilled Senior Data Scientist with over 12 years of specialized experience delivering cutting-edge \textbf{AI and machine learning solutions}, transforming data into powerful insights and operational efficiencies across diverse domains, including Finance, Healthcare, Retail, and Technology.
+        \item Proficient in building \textbf{GenAI applications} like \textbf{RAG architectures}, utilizing tools like LangChain, FAISS, Milvus, and \textbf{AWS Bedrock}, Pinecone, AWS OpenSearch to enable dynamic, context-aware information retrieval and generation systems.
+        \item \textbf{Expertise in Agentic Workflows:} Highly experienced in designing multi-agent systems using \textbf{LangGraph and CrewAI} to automate complex, multi-step reasoning tasks, transitioning from simple chatbots to autonomous decision-making engines.
+        \item \textbf{Strategic technical leader} with a proven track record of translating complex business requirements into high-ROI AI initiatives, mentoring cross-functional engineering teams, and advocating for data-centric cultures that prioritize model transparency and ethical AI deployment.
+        \item \textbf{LLM Optimization \& ROI Strategy:} Proven ability to optimize LLM performance and reduce operational costs by up to 40\% through strategic \textbf{model quantization}, prompt engineering, and intelligent model routing (SLM vs LLM) for specific tasks.
+        \item Skilled in embedding generation using different embedding models from Sentence Transformers, OpenAI Embeddings, NLP models (BERT, T5, GPT), Anthropic, and AWS Bedrock. also had research-oriented experience implementing different vector searches for efficient and accurate retrieval.
+        \item Designed end-to-end data     on \textbf{AWS} for ingesting, transforming, embedding, and storing documents for RAG workflows.
+        \item Proficient in designing and optimizing data pipelines, feature stores, and ML workflows within \textbf{Databricks and Azure} environments. Adept in integrating Unity Catalog for efficient data governance and access control. Strong background in Java and Python, enabling seamless integration of ML models with legacy applications. Experienced in deploying and managing containerized ML solutions using Kubernetes (AKS) and monitoring system performance using Splunk and Datadog.
+        \item Experienced in integrating \textbf{LLMs} like OpenAI GPT, Hugging Face Transformers (BERT, RoBERTa, T5), Meta Llama 2, Anthropic Claude for natural language generation while optimizing prompts and retrieval mechanisms to ensure precise, non-hallucinated outputs directly aligned with source data. Used fine-tuning techniques like LoRA, QLoRA, PEFT
+        \item Skilled in predictive analytics and demand forecasting using ARIMA, SARIMA, Prophet, LSTM, XGBoost, and Random Forests, achieving significant business impact such as reduced inventory overstocking and improved cash flow accuracy.
+        \item Hands-on experience with advanced ML algorithms, including GANs and reinforcement learning, for specialized research projects.
+        \item Experienced in integrating AI solutions into cloud infrastructures such as AWS, Azure, and GCP, with vast experience working on AWS and an in-depth understanding of AWS tools and services such as Amazon SageMaker, AWS Lambda, AWS Step Functions, Amazon S3, Amazon Redshift, and AWS Glue.
+        \item Skilled in developing and fine-tuning large language models (LLMs), including Transformer-based architectures like BERT, for advanced NLP applications, and experienced in building predictive models and recommendation systems to drive customer engagement, operational efficiency, and revenue growth.
+        \item Adept at leveraging advanced machine learning techniques such as supervised and unsupervised learning (K-Means, DBSCAN, Autoencoders) to uncover hidden patterns and insights in data, reinforcement learning, and deep neural networks(CNNs, RNNs) to address complex business challenges and create measurable impacts.
+        \item Deep understanding of AWS Cloud services including Lambda, S3, CloudWatch, CloudTrail, and Step Functions to design secure, scalable, and robust machine learning pipelines and applications.
+        \item Proficient in handling both structured and unstructured data, with expertise in programming languages like Python, SQL, and Scala, and tools like TensorFlow, PyTorch, and Spark to enable efficient and scalable ML workflows.
+        \item Experienced in orchestrating the entire machine learning lifecycle, from strategic planning to production deployment, enabling data-driven decision-making and innovation at scale.
+        \item Demonstrated strong project management capabilities, having led cross-functional teams and collaborated closely with stakeholders to translate business requirements into actionable ML strategies.
+        \item Skilled in cloud monitoring and logging tools, with a track record of optimizing system performance and reducing response times.
+        \item Dedicated to continuous learning, consistently integrating the latest advancements in machine learning, artificial intelligence, and data science to enhance accuracy, scalability, and performance in projects.
+        \item Recognized for strong interpersonal skills, with the ability to communicate complex technical concepts to non-technical stakeholders, ensuring alignment and shared understanding across project phases.
+        \item Driven by a passion for innovation, with industry-recognized achievements, including patented AI algorithms, award-winning projects, and publications in leading ML and AI journals. Consistently delivers high-quality, impactful solutions that empower organizations to achieve strategic goals, improve efficiency, and foster data-centric cultures.
+    \end{highlights}
+\end{onecolentry}
+
+\section{Technical Skills}
+\begin{onecolentry}
+    \begin{description}[leftmargin=5.4cm, labelsep=0.2cm, itemsep=0.45cm, parsep=0pt, style=multiline]
+        \item[\textbf{Programming Languages:}] Python (Expert), SQL (Advanced), Java (Advanced), Scala, C, C++
+        \item[\textbf{ML \& AI Frameworks:}] Scikit-learn, TensorFlow, Keras, PyTorch, XGBoost, LightGBM, CatBoost, H2O.ai
+        \item[\textbf{NLP \& LLMs:}] transformers (BERT, GPT, Claude, Llama, Falcon T5, RoBERTa), Anthropic Claude, Gemini, NLTK, spaCy, Hugging Face Transformers, OpenAI API, Langchain, LangGraph, prompt engineering, fine-tuning (LoRA, Adapter tuning, p-tuning)
+        \item[\textbf{Statistical \& Analytical Methods:}] Hypothesis Testing, Regression Analysis, Bayesian Analysis, PCA, LDA, Time Series Analysis (ARIMA, Prophet), Feature Engineering, Model Optimization
+        \item[\textbf{Vector Databases:}] Pinecone, ChromaDB, Milvus, OpenSearch, FAISS
+        \item[\textbf{Databricks \& Data Engineering:}] Unity Catalog, Databricks Feature Store, Spark, MLflow, Delta Lake
+        \item[\textbf{Visualization Tools:}] Tableau, Power BI, Matplotlib, Seaborn, Plotly, ggplot2
+        \item[\textbf{Cloud Platforms \& Services:}] AWS (S3, EC2, Bedrock, Lambda, Comprehend, Textract, Rekognition, Redshift, SageMaker), Azure (Azure ML, Azure Data Lake, Cosmos DB, Azure Functions, Azure DevOps), GCP
+        \item[\textbf{MLOps \& Model Deployment:}] MLflow, Azure ML, Docker, Kubernetes, Jenkins, GitHub Actions, AWS SageMaker, GCP AI Platform
+        \item[\textbf{Big Data Technologies:}] Hadoop, Spark, Kafka, Airflow, HDFS, Hive, MapReduce
+        \item[\textbf{Data Modeling \& Analysis Tools:}] ER-Studio, Erwin Data Modeler, StatsModels, SciPy, NumPy, Pandas
+        \item[\textbf{Database Systems:}] SQL (MySQL, PostgreSQL, SQL Server, Oracle), NoSQL (MongoDB, DynamoDB, Cassandra, Cosmos DB)
+        \item[\textbf{Version Control:}] Git (GitHub, GitLab, Bitbucket), branch management, versioning strategies
+        \item[\textbf{IDE \& Development Tools:}] Jupyter Notebook, VS Code, PyCharm, Databricks, Eclipse
+        \item[\textbf{Project Management \& Collab:}] JIRA, Azure DevOps Boards, Agile (Scrum), Confluence
+    \end{description}
+\end{onecolentry}
+\vspace{0.2cm}
+\section{Education}
+\begin{onecolentry}
+    \textbf{Master of Science in Computer Science} \hfill 2013 \\
+    University of Cincinnati \hfill Cincinnati ,OH
+
+    \vspace{0.2cm}
+
+    \textbf{Bachelor of Technology in Computer Science and Engineering} \hfill 2012 \\
+    Jawaharlal Nehru Technological University (JNTUH) \hfill Hyderabad, India
+\end{onecolentry}
+
+\section{Professional Experience}
+
+\textbf{Data Scientist (Generative AI)} \hfill May 2022 -- Present \\
+FedEx \hfill Memphis, TN
+\begin{onecolentry}
+    \begin{highlights}
+        \item Architected a \textbf{Global Trade Intelligence RAG Platform} designed to assist brokerage agents in navigating international customs regulations and tax treaties across 220 countries, reducing manual research time by 60\%.
+        \item \textbf{Advanced RAG Evaluation:} Implemented a robust automated testing framework using \textbf{RAGAS and G-Eval} to measure context precision and faithfulness, significantly reducing hallucination rates in sensitive shipping documentation.
+        \item \textbf{Two-Stage Retrieval Optimization:} Engineered a "Retrieve-and-Rerank" architecture using \textbf{Cohere Rerank} and Cross-Encoders to improve the Mean Reciprocal Rank (MRR) of retrieved trade laws, ensuring top-1 accuracy for critical clearance protocols.
+        \item Engineered a high-performance backend orchestration layer using \textbf{LangChain and AWS Lambda} to handle complex queries; transitioned from simple retrieval to a "Plan-and-Execute" agentic workflow.
+        \item \textbf{Semantic Cache Implementation:} Developed a high-speed semantic caching layer using \textbf{RedisVL} to store and retrieve previously answered trade queries, reducing LLM API consumption by 30\% and decreasing average response latency to under 500ms.
+        \item \textbf{Safety \& Compliance Guardrailing:} Engineered a dual-layer validation system using \textbf{NeMo Guardrails} and custom Pydantic-based output parsing to enforce "Hard Guardrails" against jailbreaking and out-of-scope queries, ensuring 100\% alignment with corporate legal policies.
+        \item Developed a specialized Data Ingestion Pipeline that utilized hybrid chunking strategies to preserve the structural hierarchy of legal trade documents stored in Amazon OpenSearch via Titan Bedrock Embeddings.
+        \item \textbf{Model Fine-Tuning \& Deployment:} Spearheaded the migration of specialized classification tasks from Claude 3 to fine-tuned \textbf{Llama 3 (8B)} models hosted on \textbf{Amazon SageMaker}, resulting in a 50\% reduction in inference costs while maintaining high accuracy.
+        \item Optimized Model Deployment Architecture by implementing a "Router" pattern in the backend, switching between Anthropic Claude 3 Haiku for speed and Sonnet for complex reasoning, reducing API costs by 40\%.
+        \item Enhanced Backend Reliability by building custom middleware in Python to handle rate-limiting and circuit-breaking logic across Amazon Bedrock endpoints, ensuring 99.9\% availability during "Peak Season."
+        \item Implemented a \textbf{Hybrid Retrieval system} combining FAISS for rapid similarity search and OpenSearch’s BM25 for keyword matching to resolve specific, alphanumeric Harmonized System (HS) shipping codes.
+        \item Built an Automated MLOps Evaluation Suite using Jenkins and AWS Step Functions that runs "Golden Dataset" tests, measuring precision, faithfulness, and answer relevancy to prevent hallucinations.
+        \item Streamlined Model Serving by containerizing auxiliary microservices with Docker, deploying them on serverless infrastructure to allow the backend to scale horizontally in response to global traffic spikes.
+        \item Collaborated with Trade Compliance and Legal experts to design "Hard Guardrails," ensuring the model cites specific sections of the FedEx Global Trade Manager as its source.
+        \item Developed a Predictive Route-Optimization Model using \textbf{PySpark and XGBoost} to forecast potential customs clearance delays based on historical port congestion data, integrated into chatbot proactive alerts.
+        \item Humanized User Experience by implementing \textbf{Chain-of-Thought (CoT) prompting} with a "Source Verification" step, allowing agents to click through to original PDF sources stored in S3.
+        \item Monitored System Health and User Feedback by building a custom telemetry bridge between AWS CloudWatch and Tableau, tracking latency and helpfulness ratings of AI interactions.
+        \item Led Cross-functional Syncs between AI Research and Core Infrastructure teams to ensure the LLM backend was seamlessly integrated with legacy shipment tracking databases via secure REST APIs.
+        \item Designed end-to-end \textbf{data pipelines on AWS} for ingesting, transforming, embedding, and storing documents for RAG workflows, ensuring high-dimensional logistical data was processed with zero loss.
+        \item Performed one-shot, zero-shot, and few-shot learning to guide model generation based on user input, tailored for logistical nuance and international shipping documentation.
+        \item Provided comprehensive documentation and training sessions for internal users, leading sessions on MLOps best practices adopted across engineering teams to standardize deployment.
+        \item \textbf{Core Technologies:} AWS Bedrock (Claude 3), LangChain, Amazon OpenSearch, FAISS, AWS Lambda, Step Functions, S3, DynamoDB, PySpark, Jenkins, Docker, Tableau, CloudWatch.
+    \end{highlights}
+\end{onecolentry}
+
+\vspace{0.5cm}
+
+\textbf{Sr. Machine Learning Engineer} \hfill Aug 2019 -- Apr 2022 \\
+Citi Bank \hfill Irving, TX
+\begin{onecolentry}
+    \begin{highlights}
+        \item Architected a Centralized Liquidity Feature Store on \textbf{Databricks} to unify real-time cash flow signals across 15+ regions, solving silos that led to inconsistent intra-day liquidity reporting.
+        \item \textbf{High-Frequency Orchestration:} Developed an event-driven data orchestration framework using \textbf{Kafka and Spark Streaming} to capture real-time SWIFT payment messages, reducing the latency of liquidity threshold alerts from 1 hour to sub-5 minutes.
+        \item Operationalized Enterprise Data Governance via \textbf{Unity Catalog} to manage access to sensitive transactional data; automated audit trails for Basel III regulatory compliance.
+        \item Engineered high-throughput ETL pipelines using \textbf{PySpark and Delta Lake} to ingest and clean 5TB+ of daily SWIFT logs; optimized execution plans to ensure "T+0" visibility into cash positions.
+        \item \textbf{Fraud-Liquidity Correlation Engine:} Engineered a graph-based analysis pipeline using \textbf{GraphX} to identify linkages between anomalous transaction patterns and sudden liquidity drains, mitigating risk for high-value corporate accounts.
+        \item Bridged AI and Legacy Core Banking by developing ML microservices in Java and Python; integrated liquidity forecasting models with legacy Java mainframes via low-latency gRPC and REST APIs.
+        \item Led the migration of high-stakes ML workloads to \textbf{Azure Kubernetes Service (AKS)}, containerizing model environments with Docker and implementing horizontal pod autoscaling.
+        \item Developed a custom NLP Engine using spaCy and NLTK to parse and categorize unstructured payment instructions, reducing manual classification errors by 30\%.
+        \item Implemented Transformer-based contextual embeddings to analyze historical customer wire-transfer patterns, allowing the bank to provide "Tailored Liquidity Buffers" for corporate clients.
+        \item Designed advanced Cash-Flow Segmentation models using K-Means and DBSCAN to identify hidden correlations between global economic shifts and industry-sector withdrawals.
+        \item Built an \textbf{AI-Driven Intra-day Liquidity Forecaster} using ARIMA, SARIMA, and LSTM to predict timing of high-value payments, minimizing reliance on expensive overnight borrowing.
+        \item Enhanced Model Interpretability for Risk Management by utilizing SHAP and LIME to explain why high-value transactions were flagged as "Out-of-Pattern," meeting internal MRM standards.
+        \item Automated Model Retraining and Drift Monitoring using \textbf{MLflow}; built proactive alerts that triggered when global interest rate shifts caused model deviation, ensuring 99.9\% reliability.
+        \item Developed interactive Simulation Dashboards with Dash/Plotly, enabling stakeholders to perform "Black Swan" stress tests on High-Quality Liquid Assets (HQLA).
+        \item Optimized Deployment Performance by integrating \textbf{Datadog and Splunk} for real-time telemetry; implemented custom circuit-breakers to prevent cascading failures during database latency.
+        \item Documented the end-to-end Machine Learning Development Life Cycle (MDLC) in Confluence and JIRA, providing documentation required for Federal Reserve audits.
+        \item \textbf{Core Technologies:} Databricks, Unity Catalog, PySpark, Java, Python, Azure AKS, MLflow, Docker, Splunk, Datadog, NLTK, spaCy, ARIMA, LSTM, XGBoost, Dash/Plotly, Delta Lake.
+    \end{highlights}
+\end{onecolentry}
+
+\vspace{0.3cm}
+
+\textbf{ML Engineer} \hfill July 2016 -- July 2019 \\
+CVS Health \hfill Woonsocket, RI
+\begin{onecolentry}
+    \begin{highlights}
+        \item Architected an End-to-End Cold Chain Monitoring System to predict spoilage risks for temperature-sensitive pharmaceuticals, comparing sensor data against historical stability logs.
+        \item Performed deep Stakeholder Analysis to translate clinical requirements into technical schemas; collaborated with data modelers to track high-value prescription movement across the retail network.
+        \item Managed complete Data Science Life Cycle, from acquisition to visualization of delivery success rates, ensuring pharmaceutical data integrity through rigorous validation.
+        \item Built a Scalable Data Lake on \textbf{Azure Data Lake Storage (ADLS)} to centralize unstructured IoT sensor data and shipment telemetry, optimizing storage costs for analytical workloads.
+        \item Developed Event-Driven \textbf{Azure Functions} to trigger real-time alerts and automate administrative tasks when shipment conditions deviated from prescribed safety thresholds.
+        \item Developed Spark Programs using PySpark for high-performance processing of multi-terabyte drug-interaction logs and pharmacy transaction records.
+        \item Orchestrated \textbf{Complex ETL Workflows with Airflow DAGs} to automate data preprocessing, feature engineering, and Spark job submissions for inventory replenishment.
+        \item Operationalized the ML Lifecycle via \textbf{Azure Machine Learning (AML)} for version-controlled training, automated testing, and deployment into secure production environments.
+        \item Leveraged AML’s AutoML capabilities to rapidly prototype and benchmark model iterations, accelerating identification of optimal algorithms for pharmacy demand scenarios.
+        \item Engineered a Logistics Risk-Scoring Model that generated real-time "Shipment Health" scores at the point of billing, enabling proactive rerouting of critical medication.
+        \item Developed High-Precision Forecasting Models for national shipment volumes using \textbf{ARIMA and Prophet}, integrating flu cycles to improve warehouse labor allocation by 25\%.
+        \item Developed Deep Learning Models using \textbf{PyTorch and TensorFlow} for route optimization, while maintaining baseline transparency with Decision Trees for regulatory reporting.
+        \item Executed Supervised Learning on Freight Claims Data to identify root causes of shipment damage and loss, utilizing historical transaction history to mitigate financial liability.
+        \item Validated Model Robustness through RMSE, MAE, F-Score, and ROC-AUC metrics, ensuring risk models met healthcare compliance standards.
+        \item Enforced Enterprise-Grade Version Control by implementing branch protection rules and peer-review workflows in \textbf{Git} to prevent code drift and maintain code quality.
+        \item Architected CI/CD Pipelines with Jenkins to automate the build-test-deploy cycle, orchestrating the packaging of immutable application artifacts.
+        \item Containerized ML Services with Docker and orchestrated deployment via \textbf{AKS}, enabling the pharmacy network to handle traffic spikes during peak prescription cycles.
+        \item Designed Interactive \textbf{Tableau Dashboards} for leadership, transforming raw logistics telemetry into real-time insights regarding supply chain bottlenecks.
+        \item \textbf{Core Technologies:} Azure Data Lake, Azure Functions, PySpark, Airflow, Azure ML (AML), PyTorch, TensorFlow, Docker, Kubernetes (AKS), Jenkins, Tableau, ARIMA, Prophet.
+    \end{highlights}
+\end{onecolentry}
+
+\vspace{0.3cm}
+
+\textbf{Software Engineer} \hfill Feb 2014 -- June 2016 \\
+State of Maryland (Department of Human Services) \hfill Baltimore, MD
+\begin{onecolentry}
+    \begin{highlights}
+        \item Architected a \textbf{CNN-based Document Recognition System} using TensorFlow and Keras to automate classification of applicant identity documents, achieving 95\% accuracy.
+        \item Streamlined Data Preprocessing and Augmentation workflows using \textbf{Google Cloud Dataflow}, allowing for parallel processing of applicant records and reducing training time by 30\%.
+        \item Developed Predictive Eligibility Models using \textbf{BigQuery ML} to forecast demand for social programs like SNAP, leveraging structured datasets to optimize resource allocation.
+        \item Engineered a Fraud Detection Classification Model using Linear Regression and ensemble methods to identify high-risk anomalies in benefits disbursements, flagging transactions for audit.
+        \item Leveraged \textbf{Unsupervised Learning Algorithms} (K-Means, DBSCAN) to identify hidden clusters in service-usage data, uncovering underserved demographic patterns in the Baltimore area.
+        \item Delivered Actionable Customer Segmentation Insights that led to a 20\% improvement in targeted outreach campaigns for child support and foster care programs.
+        \item Led a Cross-functional Team to integrate ML predictions into legacy enterprise systems, building scalable APIs to serve real-time predictions to various case-management units.
+        \item Designed Robust Metrics for A/B Testing of new portal interfaces; built Tableau dashboards to track applicant conversion rates and presented findings to state stakeholders.
+        \item Executed Rigorous Statistical Analysis, including hypothesis testing and Bayesian inference, to measure the causal impact of policy changes on social program participation rates.
+        \item Built \textbf{Scalable ETL Pipelines} to retrieve unstructured data from NoSQL databases, aggregating and loading it into analytical platforms for standardized reporting.
+        \item Enhanced Executive Decision Accuracy by 25\% by embedding real-time ML insights into state leadership dashboards, providing a data-driven view of program health and budget.
+        \item \textbf{Core Technologies:} TensorFlow, Keras, BigQuery ML, Python, Scikit-learn, Tableau, SQL, MongoDB, Dataflow, K-Means, DBSCAN.
+    \end{highlights}
+\end{onecolentry}
+
+\end{document}
