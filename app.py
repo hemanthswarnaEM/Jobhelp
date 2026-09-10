@@ -544,6 +544,18 @@ def extract_latex_from_response(response_text):
         end_idx = text.find("\\end{document}") + len("\\end{document}")
         text = text[start_idx:end_idx]
         
+    # 4. Enforce constant heading below the name on the resume
+    def _enforce_constant_heading(m):
+        header_block = m.group(0)
+        if re.search(r'\{\\large\s+[^}]+\}', header_block):
+            return re.sub(r'\{\\large\s+[^}]+\}', r'{\\large Ai/Ml engineer ( data expert )}', header_block)
+        elif re.search(r'\\large\s+[^}\n]+', header_block):
+            return re.sub(r'\\large\s+[^}\n]+', r'\\large Ai/Ml engineer ( data expert )', header_block)
+        return header_block
+
+    if "\\begin{header}" in text:
+        text = re.sub(r'\\begin\{header\}[\s\S]*?\\end\{header\}', _enforce_constant_heading, text)
+        
     return text
 
 def parse_json_from_response(response_text):
@@ -911,7 +923,8 @@ www.linkedin.com/in/swarna-hemanth
             You are a professional resume editor. Take the base resume in LaTeX form and the target JD below.
             Extract all the keywords in the JD and see if there are any missing in the base resume.
             Implement the necessary changes as per the JD in the resume by keeping the structure of the resume intact:
-            - Do NOT change the company names (FedEx, Citi Bank, CVS Health, State of Maryland) or timelines.
+            - CRITICAL CONSTANT: Do NOT edit, alter, or replace the candidate's title/heading below the name in the header. It MUST remain constant as "Ai/Ml engineer ( data expert )" (i.e. {{\\large Ai/Ml engineer ( data expert )}}) on all tailored resumes regardless of the job title in the JD.
+            - Do NOT change the candidate name, contact info, company names (FedEx, Citi Bank, CVS Health, State of Maryland) or timelines.
             - Keep the number of bullet points under each section exactly the same as the base resume.
             - Keep the size/length of each corresponding bullet point approximately same.
             - Inject high-density keywords and skills from the JD into the bullet points where relevant, maintaining professional tone.
