@@ -1072,8 +1072,9 @@ api_key = get_secret("GEMINI_API_KEY", "")
 premium_model = "gemini-3.1-flash-lite"
 cheaper_model = "gemini-3.1-flash-lite"
 sender_email = get_secret("SENDER_EMAIL", "hemanthswarna3838@gmail.com")
-gmail_app_password = get_secret("GMAIL_APP_PASSWORD", "")
-auto_create_draft = True
+# Only allow Gmail automation if logged in as Admin
+gmail_app_password = get_secret("GMAIL_APP_PASSWORD", "") if is_admin else ""
+auto_create_draft = True if is_admin else False
 
 default_downloads_folder = os.environ.get("DOWNLOAD_DIR", "")
 if not default_downloads_folder:
@@ -1697,8 +1698,9 @@ with main_tabs[0]:
                         else:
                             st.caption(f"Status: {app.get('draft_status', 'Draft ready locally')}")
                             
-                        # Quick link to Gmail Drafts
-                        st.link_button("Open Gmail Drafts ➔", "https://mail.google.com/mail/u/0/#drafts", use_container_width=True)
+                        # Quick link to Gmail Drafts (Admin only)
+                        if is_admin and is_drafted:
+                            st.link_button("Open Gmail Drafts ➔", "https://mail.google.com/mail/u/0/#drafts", use_container_width=True)
                         
                         # Unified Recipient, Location, Subject, and Body fields
                         edited_to = st.text_input("Recipient Email (To:)", value=app.get("email", ""), key=f"recip_email_{app['id']}")
@@ -1724,60 +1726,61 @@ with main_tabs[0]:
                             
                         st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
                         
-                        # Action Buttons: Send & Update Draft
-                        btn_send_col, btn_draft_col = st.columns([1.3, 1])
-                        
-                        with btn_send_col:
-                            if st.button("✉ Send Email", key=f"send_smtp_{app['id']}", use_container_width=True, type="primary"):
-                                if not gmail_app_password:
-                                    st.error("Please enter your Gmail App Password in the sidebar to send emails.")
-                                elif not edited_to or edited_to == "N/A" or "@" not in edited_to:
-                                    st.error("Please provide a valid recipient email address in the 'Recipient Email' field.")
-                                else:
-                                    with st.spinner(f"Sending email directly to {edited_to}..."):
-                                        send_ok, send_msg = send_email_smtp(
-                                            sender_email=sender_email,
-                                            app_password=gmail_app_password,
-                                            recipient_email=edited_to,
-                                            subject=edited_subject,
-                                            body=edited_body,
-                                            pdf_bytes=current_pdf,
-                                            pdf_filename="Hemanth_swarna_ resume.pdf"
-                                        )
-                                        if send_ok:
-                                            st.session_state.applications[active_key]["email_sent"] = True
-                                            st.session_state.applications[active_key]["sent_time"] = datetime.datetime.now().strftime("%I:%M %p")
-                                            update_application_status(app.get("company", ""), app.get("job_title", ""), "Sent")
-                                            st.toast(f"Email sent successfully to {edited_to}")
-                                            st.rerun()
-                                        else:
-                                            st.error(send_msg)
-                                            
-                        with btn_draft_col:
-                            if st.button("✉ Save Draft", key=f"save_gmail_draft_{app['id']}", use_container_width=True):
-                                if not gmail_app_password:
-                                    st.error("Please enter your Gmail App Password in the sidebar.")
-                                elif not edited_to or edited_to == "N/A" or "@" not in edited_to:
-                                    st.error("Please provide a valid recipient email address.")
-                                else:
-                                    with st.spinner("Uploading draft to Gmail..."):
-                                        draft_ok, draft_msg = save_to_gmail_drafts(
-                                            sender_email=sender_email,
-                                            app_password=gmail_app_password,
-                                            recipient_email=edited_to,
-                                            subject=edited_subject,
-                                            body=edited_body,
-                                            pdf_bytes=current_pdf,
-                                            pdf_filename="Hemanth_swarna_ resume.pdf"
-                                        )
-                                        if draft_ok:
-                                            st.session_state.applications[active_key]["draft_created_in_gmail"] = True
-                                            st.session_state.applications[active_key]["draft_status"] = "Saved in Gmail Drafts"
-                                            update_application_status(app.get("company", ""), app.get("job_title", ""), "Drafted")
-                                            st.toast("Draft saved in Gmail Drafts")
-                                            st.rerun()
-                                        else:
-                                            st.error(draft_msg)
+                        # Action Buttons: Send & Update Draft (Admin only)
+                        if is_admin:
+                            btn_send_col, btn_draft_col = st.columns([1.3, 1])
+                            
+                            with btn_send_col:
+                                if st.button("✉ Send Email", key=f"send_smtp_{app['id']}", use_container_width=True, type="primary"):
+                                    if not gmail_app_password:
+                                        st.error("Please enter your Gmail App Password in the sidebar to send emails.")
+                                    elif not edited_to or edited_to == "N/A" or "@" not in edited_to:
+                                        st.error("Please provide a valid recipient email address in the 'Recipient Email' field.")
+                                    else:
+                                        with st.spinner(f"Sending email directly to {edited_to}..."):
+                                            send_ok, send_msg = send_email_smtp(
+                                                sender_email=sender_email,
+                                                app_password=gmail_app_password,
+                                                recipient_email=edited_to,
+                                                subject=edited_subject,
+                                                body=edited_body,
+                                                pdf_bytes=current_pdf,
+                                                pdf_filename="Hemanth_swarna_ resume.pdf"
+                                            )
+                                            if send_ok:
+                                                st.session_state.applications[active_key]["email_sent"] = True
+                                                st.session_state.applications[active_key]["sent_time"] = datetime.datetime.now().strftime("%I:%M %p")
+                                                update_application_status(app.get("company", ""), app.get("job_title", ""), "Sent")
+                                                st.toast(f"Email sent successfully to {edited_to}")
+                                                st.rerun()
+                                            else:
+                                                st.error(send_msg)
+                                                
+                            with btn_draft_col:
+                                if st.button("✉ Save Draft", key=f"save_gmail_draft_{app['id']}", use_container_width=True):
+                                    if not gmail_app_password:
+                                        st.error("Please enter your Gmail App Password in the sidebar.")
+                                    elif not edited_to or edited_to == "N/A" or "@" not in edited_to:
+                                        st.error("Please provide a valid recipient email address.")
+                                    else:
+                                        with st.spinner("Uploading draft to Gmail..."):
+                                            draft_ok, draft_msg = save_to_gmail_drafts(
+                                                sender_email=sender_email,
+                                                app_password=gmail_app_password,
+                                                recipient_email=edited_to,
+                                                subject=edited_subject,
+                                                body=edited_body,
+                                                pdf_bytes=current_pdf,
+                                                pdf_filename="Hemanth_swarna_ resume.pdf"
+                                            )
+                                            if draft_ok:
+                                                st.session_state.applications[active_key]["draft_created_in_gmail"] = True
+                                                st.session_state.applications[active_key]["draft_status"] = "Saved in Gmail Drafts"
+                                                update_application_status(app.get("company", ""), app.get("job_title", ""), "Drafted")
+                                                st.toast("Draft saved in Gmail Drafts")
+                                                st.rerun()
+                                            else:
+                                                st.error(draft_msg)
                         
                         with st.expander("View Raw Text ➔", expanded=False):
                             st.markdown("**Subject:**")
