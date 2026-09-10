@@ -262,9 +262,40 @@ Hemanth Swarna's CV
     with open(BASE_RESUME_PATH, "w", encoding="utf-8") as f:
         f.write(default_latex)
 
-# Read base resume default content
+# Function to normalize and enforce the constant heading below the name
+def normalize_resume_heading(text, target_heading="AI/Ml engineer ( Data Expert)"):
+    if not text or not isinstance(text, str):
+        return text
+    
+    # 1. If \begin{header}...\end{header} environment is present
+    if r"\begin{header}" in text:
+        def replace_in_header(m):
+            header_content = m.group(0)
+            if re.search(r'\{\\large\s+[^}]+\}', header_content):
+                return re.sub(r'\{\\large\s+[^}]+\}', f'{{\\\\large {target_heading}}}', header_content)
+            elif re.search(r'\\large\s+[^}\n\\]+', header_content):
+                return re.sub(r'\\large\s+[^}\n\\]+', f'\\\\large {target_heading}', header_content)
+            # If no large tag in header, inject right after candidate name
+            name_pattern = re.compile(r'(\\textbf\{[\s\S]*?Hemanth Swarna[\s\S]*?\})(\s*)(?:\\vspace\{[^}]+\}\s*)?(?:[^\n\\]+)?', re.IGNORECASE)
+            if name_pattern.search(header_content):
+                return name_pattern.sub(r'\1\n\n    \\vspace{0.15cm}\n    {\\large ' + target_heading + r'}\n    \\vspace{0.15cm}', header_content, count=1)
+            return header_content
+        text = re.sub(r'\\begin\{header\}[\s\S]*?\\end\{header\}', replace_in_header, text)
+    else:
+        # 2. If no \begin{header}, look for Hemanth Swarna and the line directly following it
+        name_match = re.search(r'(\\textbf\{[\s\S]*?Hemanth Swarna[\s\S]*?\})', text, re.IGNORECASE)
+        if name_match:
+            sub_after_name = text[name_match.end():name_match.end()+300]
+            if r'{\large' in sub_after_name:
+                text = text[:name_match.end()] + re.sub(r'\{\\large\s+[^}]+\}', f'{{\\\\large {target_heading}}}', sub_after_name, count=1) + text[name_match.end()+300:]
+            elif r'\large' in sub_after_name:
+                text = text[:name_match.end()] + re.sub(r'\\large\s+[^}\n\\]+', f'\\\\large {target_heading}', sub_after_name, count=1) + text[name_match.end()+300:]
+                
+    return text
+
+# Read base resume default content and normalize heading
 with open(BASE_RESUME_PATH, "r", encoding="utf-8") as f:
-    default_base_resume = f.read()
+    default_base_resume = normalize_resume_heading(f.read())
 
 # ----------------- SESSION STATE INIT -----------------
 if "authenticated" not in st.session_state:
@@ -273,8 +304,10 @@ if "authenticated" not in st.session_state:
 if "user_role" not in st.session_state:
     st.session_state.user_role = None
 
-if "base_resume_latex" not in st.session_state:
+if "base_resume_latex" not in st.session_state or "Senior Data Scientist" in st.session_state.base_resume_latex:
     st.session_state.base_resume_latex = default_base_resume
+else:
+    st.session_state.base_resume_latex = normalize_resume_heading(st.session_state.base_resume_latex)
 
 if "queue" not in st.session_state:
     st.session_state.queue = []
@@ -544,17 +577,8 @@ def extract_latex_from_response(response_text):
         end_idx = text.find("\\end{document}") + len("\\end{document}")
         text = text[start_idx:end_idx]
         
-    # 4. Enforce constant heading below the name on the resume
-    def _enforce_constant_heading(m):
-        header_block = m.group(0)
-        if re.search(r'\{\\large\s+[^}]+\}', header_block):
-            return re.sub(r'\{\\large\s+[^}]+\}', r'{\\large Ai/Ml engineer ( data expert )}', header_block)
-        elif re.search(r'\\large\s+[^}\n]+', header_block):
-            return re.sub(r'\\large\s+[^}\n]+', r'\\large Ai/Ml engineer ( data expert )', header_block)
-        return header_block
-
-    if "\\begin{header}" in text:
-        text = re.sub(r'\\begin\{header\}[\s\S]*?\\end\{header\}', _enforce_constant_heading, text)
+    # 4. Enforce constant heading below the candidate name
+    text = normalize_resume_heading(text)
         
     return text
 
@@ -919,11 +943,14 @@ www.linkedin.com/in/swarna-hemanth
             # --- STEP 2: TAILOR RESUME IN LATEX ---
             self._update_progress(job_id, "Processing...")
             
+            # Ensure base resume passed to LLM has the exact constant heading
+            base_resume_latex = normalize_resume_heading(base_resume_latex)
+            
             resume_editor_prompt = f"""
             You are a professional resume editor. Take the base resume in LaTeX form and the target JD below.
             Extract all the keywords in the JD and see if there are any missing in the base resume.
             Implement the necessary changes as per the JD in the resume by keeping the structure of the resume intact:
-            - CRITICAL CONSTANT: Do NOT edit, alter, or replace the candidate's title/heading below the name in the header. It MUST remain constant as "Ai/Ml engineer ( data expert )" (i.e. {{\\large Ai/Ml engineer ( data expert )}}) on all tailored resumes regardless of the job title in the JD.
+            - CRITICAL CONSTANT: Do NOT edit, alter, or replace the candidate's title/heading below the name in the header. It MUST remain constant as "AI/Ml engineer ( Data Expert)" (i.e. {{\\large AI/Ml engineer ( Data Expert)}}) on all tailored resumes regardless of the job title in the JD.
             - Do NOT change the candidate name, contact info, company names (FedEx, Citi Bank, CVS Health, State of Maryland) or timelines.
             - Keep the number of bullet points under each section exactly the same as the base resume.
             - Keep the size/length of each corresponding bullet point approximately same.
@@ -949,6 +976,7 @@ www.linkedin.com/in/swarna-hemanth
                 prompt=resume_editor_prompt
             )
             latex_content = extract_latex_from_response(resume_raw)
+            latex_content = normalize_resume_heading(latex_content)
             
             # --- STEP 3: COMPILE PDF (WITH BASE RESUME FALLBACK) ---
             self._update_progress(job_id, "Processing...")
