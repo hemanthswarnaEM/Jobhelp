@@ -1084,19 +1084,29 @@ is_admin = (st.session_state.get("user_role") == "admin")
 # Helper to read from Streamlit secrets (Streamlit Cloud) or Environment variables
 def get_secret(key_name, fallback=""):
     try:
+        # Check direct key in st.secrets
         if key_name in st.secrets:
-            return st.secrets[key_name]
+            return str(st.secrets[key_name]).strip()
+        # Check uppercase / lowercase in st.secrets
+        if key_name.upper() in st.secrets:
+            return str(st.secrets[key_name.upper()]).strip()
+        if key_name.lower() in st.secrets:
+            return str(st.secrets[key_name.lower()]).strip()
     except Exception:
         pass
-    return os.environ.get(key_name, fallback)
+    # Check os.environ
+    val = os.environ.get(key_name, None) or os.environ.get(key_name.upper(), None) or os.environ.get(key_name.lower(), None)
+    if val:
+        return str(val).strip()
+    return fallback
 
 # Safe default values used in background execution for all users
 provider = "Google Gemini"
-api_key = get_secret("GEMINI_API_KEY", "")
+api_key = get_secret("GEMINI_API_KEY", "") or get_secret("GOOGLE_API_KEY", "") or get_secret("API_KEY", "")
 premium_model = "gemini-3.1-flash-lite"
 cheaper_model = "gemini-3.1-flash-lite"
-sender_email = get_secret("SENDER_EMAIL", "hemanthswarna3838@gmail.com")
-gmail_app_password = get_secret("GMAIL_APP_PASSWORD", "")
+sender_email = get_secret("SENDER_EMAIL", "") or get_secret("EMAIL", "") or "hemanthswarna3838@gmail.com"
+gmail_app_password = get_secret("GMAIL_APP_PASSWORD", "") or get_secret("GMAIL_PASSWORD", "") or get_secret("APP_PASSWORD", "")
 auto_create_draft = True
 
 default_downloads_folder = os.environ.get("DOWNLOAD_DIR", "")
@@ -1713,17 +1723,18 @@ with main_tabs[0]:
                         # Status indicator banner
                         is_sent = app.get("email_sent", False)
                         is_drafted = app.get("draft_created_in_gmail", False)
+                        draft_status_text = app.get("draft_status", "Draft ready locally")
                         
                         if is_sent:
                             st.success(f"● Email Sent to {app['email']} at {app.get('sent_time', '')}")
                         elif is_drafted:
                             st.info("● Draft ready in Gmail Drafts with resume attached.")
-                        else:
-                            st.caption(f"Status: {app.get('draft_status', 'Draft ready locally')}")
-                            
-                        # Quick link to Gmail Drafts
-                        if is_drafted:
                             st.link_button("Open Gmail Drafts ➔", "https://mail.google.com/mail/u/0/#drafts", use_container_width=True)
+                        else:
+                            if any(w in draft_status_text.lower() for w in ["warning", "error", "failed", "configure", "invalid"]):
+                                st.warning(f"● {draft_status_text}")
+                            else:
+                                st.caption(f"Status: {draft_status_text}")
                         
                         # Unified Recipient, Location, Subject, and Body fields
                         edited_to = st.text_input("Recipient Email (To:)", value=app.get("email", ""), key=f"recip_email_{app['id']}")
@@ -1779,11 +1790,9 @@ with main_tabs[0]:
                                             st.error(send_msg)
                                             
                         with btn_draft_col:
-                            if st.button("✉ Save Draft", key=f"save_gmail_draft_{app['id']}", use_container_width=True):
+                            if st.button("✉ Sync to Gmail Drafts", key=f"save_gmail_draft_{app['id']}", use_container_width=True):
                                 if not gmail_app_password:
-                                    st.error("Please configure your Gmail App Password in Secrets / Sidebar.")
-                                elif not edited_to or edited_to == "N/A" or "@" not in edited_to:
-                                    st.error("Please provide a valid recipient email address.")
+                                    st.error("Please configure GMAIL_APP_PASSWORD in Streamlit Secrets.")
                                 else:
                                     with st.spinner("Uploading draft to Gmail..."):
                                         draft_ok, draft_msg = save_to_gmail_drafts(
