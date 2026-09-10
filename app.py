@@ -922,13 +922,22 @@ www.linkedin.com/in/swarna-hemanth
             )
             latex_content = extract_latex_from_response(resume_raw)
             
-            # --- STEP 3: COMPILE PDF ---
+            # --- STEP 3: COMPILE PDF (WITH BASE RESUME FALLBACK) ---
             self._update_progress(job_id, "⚙️ Compiling PDF resume...")
             pdf_bytes, compile_err = compile_latex(latex_content)
+            is_base_fallback = False
+            
+            # If tailored LaTeX compilation had an issue, automatically fall back to base resume PDF for draft
+            if not pdf_bytes:
+                self._update_progress(job_id, "⚠️ Tailored PDF compile issue. Compiling base resume for draft...")
+                base_pdf_bytes, _ = compile_latex(base_resume_latex)
+                if base_pdf_bytes:
+                    pdf_bytes = base_pdf_bytes
+                    is_base_fallback = True
             
             # --- STEP 4: AUTO-SAVE LOCALLY ---
             self._update_progress(job_id, "💾 Auto-saving files locally & logging database...")
-            if download_dir:
+            if download_dir and pdf_bytes:
                 save_files_locally(
                     latex_content=latex_content,
                     pdf_bytes=pdf_bytes,
@@ -983,6 +992,7 @@ www.linkedin.com/in/swarna-hemanth
                 "latex_content": latex_content,
                 "pdf_bytes": pdf_bytes,
                 "compile_error": compile_err,
+                "is_base_fallback": is_base_fallback,
                 "draft_status": draft_status_msg,
                 "draft_created_in_gmail": draft_created_in_gmail,
                 "email_sent": False,
@@ -1677,7 +1687,10 @@ with main_tabs[0]:
                             
                             compile_error = app.get("compile_error")
                             pdf_bytes = app.get("pdf_bytes")
-                            if pdf_bytes:
+                            is_base_fallback = app.get("is_base_fallback", False)
+                            if is_base_fallback:
+                                st.markdown('<span class="badge badge-pending" title="Base resume PDF attached (tailored LaTeX had compile issues)">Base PDF Attached</span>', unsafe_allow_html=True)
+                            elif pdf_bytes:
                                 st.markdown('<span class="badge badge-done">Completed</span>', unsafe_allow_html=True)
                             elif compile_error:
                                 st.markdown('<span class="badge badge-error">PDF Error</span>', unsafe_allow_html=True)
@@ -1766,9 +1779,14 @@ with main_tabs[0]:
                         
                         # Attachment status
                         current_pdf = app.get("pdf_bytes")
+                        is_base_fallback = app.get("is_base_fallback", False)
                         if current_pdf:
                             pdf_size_kb = len(current_pdf) / 1024
-                            st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *({pdf_size_kb:.1f} KB)*")
+                            if is_base_fallback:
+                                st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *(Base Fallback, {pdf_size_kb:.1f} KB)*")
+                                st.caption("ℹ️ Tailored LaTeX had compilation errors, so the clean base resume PDF was attached to the draft. You can edit the LaTeX on the right and click ⟳ Recompile PDF.")
+                            else:
+                                st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *({pdf_size_kb:.1f} KB)*")
                         else:
                             st.markdown("Attachment: `PDF pending compilation`")
                             
@@ -1857,8 +1875,14 @@ with main_tabs[0]:
                             if st.button("⟳ Recompile PDF", key=f"recomp_{app['id']}", use_container_width=True):
                                 with st.spinner("Re-compiling PDF..."):
                                     pdf_b, comp_err = compile_latex(edited_latex)
-                                    st.session_state.applications[active_key]["pdf_bytes"] = pdf_b
-                                    st.session_state.applications[active_key]["compile_error"] = comp_err
+                                    if pdf_b:
+                                        st.session_state.applications[active_key]["pdf_bytes"] = pdf_b
+                                        st.session_state.applications[active_key]["compile_error"] = None
+                                        st.session_state.applications[active_key]["is_base_fallback"] = False
+                                        st.toast("PDF successfully recompiled")
+                                    else:
+                                        st.session_state.applications[active_key]["compile_error"] = comp_err
+                                        st.toast("Compilation encountered an issue")
                                     if download_dir and pdf_b:
                                         save_files_locally(
                                             latex_content=edited_latex,
@@ -1866,10 +1890,6 @@ with main_tabs[0]:
                                             company=app.get("company", "Company"),
                                             download_dir=download_dir
                                         )
-                                    if pdf_b:
-                                        st.toast("PDF successfully recompiled")
-                                    else:
-                                        st.toast("Compilation encountered an issue")
                                     st.rerun()
                                     
                         with btn_c2:
@@ -1896,7 +1916,8 @@ with main_tabs[0]:
                         
                         compile_error = app.get("compile_error")
                         if compile_error:
-                            with st.expander("View Compiler Log ➔", expanded=False):
+                            expander_label = "⚠️ View Tailored Compiler Log (Base PDF was used as fallback) ➔" if app.get("is_base_fallback") else "View Compiler Log ➔"
+                            with st.expander(expander_label, expanded=False):
                                 st.code(compile_error, language="text")
 
 with main_tabs[1]:
