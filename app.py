@@ -863,7 +863,7 @@ www.linkedin.com/in/swarna-hemanth
             elif location_val and location_val != "N/A" and location_val.lower() not in subject_val.lower():
                 subject_val = f"{subject_val} - {location_val}"
                 
-            # Post-process email body: Enforce standard signature structure
+            # Post-process email body: Enforce standard signature structure with LinkedIn URL
             email_body_val = metadata.get("email_body", "").strip()
             standard_signature = (
                 "Hemanth Swarna\n"
@@ -872,15 +872,19 @@ www.linkedin.com/in/swarna-hemanth
                 "www.linkedin.com/in/swarna-hemanth"
             )
             
-            # Ensure the standardized signature is always present at the end
-            if "2139866016" not in email_body_val or "www.linkedin.com/in/swarna-hemanth" not in email_body_val:
-                body_cleaned = re.sub(
-                    r'(?:(?:Best|Warm|Kind)?\s*regards|Sincerely|Thanks|Thank you|Best)[\s,]*\n*(?:Hemanth\s*Swarna|Hemanth)?.*$',
-                    '',
-                    email_body_val,
-                    flags=re.IGNORECASE
-                ).strip()
-                email_body_val = f"{body_cleaned}\n\n{standard_signature}"
+            body_cleaned = re.sub(
+                r'(?:(?:Best|Warm|Kind)?\s*regards|Sincerely|Thanks|Thank you|Best|Cheers)?[\s,]*\n*(?:Hemanth\s*Swarna)?[\s\S]*$',
+                '',
+                email_body_val,
+                flags=re.IGNORECASE
+            ).strip()
+            if len(body_cleaned) < 50:
+                body_cleaned = email_body_val
+                for token in ["Hemanth Swarna", "hemanthswarna3838@gmail.com", "2139866016", "www.linkedin.com/in/swarna-hemanth", "linkedin.com/in/swarna-hemanth"]:
+                    body_cleaned = body_cleaned.replace(token, "").strip()
+                body_cleaned = re.sub(r'(?:(?:Best|Warm|Kind)?\s*regards|Sincerely|Thanks|Thank you|Best)[\s,]*$', '', body_cleaned, flags=re.IGNORECASE).strip()
+                
+            email_body_val = f"{body_cleaned}\n\n{standard_signature}"
                 
             # --- STEP 2: TAILOR RESUME IN LATEX ---
             self._update_progress(job_id, "✍️ Tailoring LaTeX resume with target JD keywords...")
