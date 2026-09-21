@@ -452,11 +452,52 @@ def compile_latex(latex_code):
         except Exception as e:
             return None, f"Local LaTeX compiler failed: {str(e)}"
 
-# ----------------- LOCAL FILE AUTO-SAVE UTILITY -----------------
-def save_files_locally(latex_content, pdf_bytes, company, download_dir):
+# ----------------- PDF TO WORD (DOCX) CONVERTER -----------------
+def convert_pdf_to_docx(pdf_bytes):
     """
-    Saves the LaTeX source and PDF binary to the user's local directory.
-    Format: Hemanth_swarna_ resume.pdf and Hemanth_swarna_ resume.tex
+    Converts PDF binary data into DOCX (Word) binary data using pdf2docx.
+    Returns docx_bytes, or None if conversion fails.
+    """
+    if not pdf_bytes:
+        return None
+    try:
+        import tempfile
+        import os
+        from pdf2docx import Converter
+        
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f_pdf:
+            f_pdf.write(pdf_bytes)
+            pdf_path = f_pdf.name
+            
+        docx_path = pdf_path.replace('.pdf', '.docx')
+        try:
+            cv = Converter(pdf_path)
+            cv.convert(docx_path, start=0, end=None)
+            cv.close()
+            
+            with open(docx_path, 'rb') as f_docx:
+                docx_bytes = f_docx.read()
+            return docx_bytes
+        finally:
+            if os.path.exists(pdf_path):
+                try:
+                    os.remove(pdf_path)
+                except Exception:
+                    pass
+            if os.path.exists(docx_path):
+                try:
+                    os.remove(docx_path)
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"Error converting PDF to DOCX: {e}")
+        return None
+
+# ----------------- LOCAL FILE AUTO-SAVE UTILITY -----------------
+def save_files_locally(latex_content, pdf_bytes, company, download_dir, docx_bytes=None):
+    """
+    Saves the LaTeX source, PDF binary, and DOCX Word document to the user's local directory.
+    Format: Hemanth_swarna_ resume.pdf, Hemanth_swarna_ resume.tex, and Hemanth_swarna_ resume.docx
     """
     if not download_dir:
         return None
@@ -466,9 +507,11 @@ def save_files_locally(latex_content, pdf_bytes, company, download_dir):
         
         pdf_filename = "Hemanth_swarna_ resume.pdf"
         tex_filename = "Hemanth_swarna_ resume.tex"
+        docx_filename = "Hemanth_swarna_ resume.docx"
         
         pdf_filepath = os.path.join(download_dir, pdf_filename)
         tex_filepath = os.path.join(download_dir, tex_filename)
+        docx_filepath = os.path.join(download_dir, docx_filename)
         
         # Write LaTeX file
         with open(tex_filepath, "w", encoding="utf-8") as f_tex:
@@ -479,7 +522,12 @@ def save_files_locally(latex_content, pdf_bytes, company, download_dir):
             with open(pdf_filepath, "wb") as f_pdf:
                 f_pdf.write(pdf_bytes)
                 
-        return pdf_filepath, tex_filepath
+        # Write DOCX file if we have bytes
+        if docx_bytes:
+            with open(docx_filepath, "wb") as f_docx:
+                f_docx.write(docx_bytes)
+                
+        return pdf_filepath, tex_filepath, docx_filepath
     except Exception as e:
         print(f"Error auto-saving locally: {e}")
         return None
@@ -679,9 +727,9 @@ def update_application_status(company, job_title, new_status):
 st.session_state.history = prune_and_load_history()
 
 # ----------------- GMAIL & EMAIL DISPATCH ENGINE -----------------
-def create_mime_message(sender_email, recipient_email, subject, body, pdf_bytes=None, pdf_filename="Hemanth_swarna_ resume.pdf"):
+def create_mime_message(sender_email, recipient_email, subject, body, attachment_bytes=None, attachment_filename="Hemanth_swarna_ resume.docx", pdf_bytes=None, pdf_filename=None):
     """
-    Constructs a standard RFC 2822 MIME multipart email with attached PDF.
+    Constructs a standard RFC 2822 MIME multipart email with attached Word (.docx) or PDF resume.
     """
     msg = MIMEMultipart()
     msg['From'] = sender_email
@@ -694,15 +742,21 @@ def create_mime_message(sender_email, recipient_email, subject, body, pdf_bytes=
     # Text body
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
     
-    # PDF Attachment
-    if pdf_bytes:
-        part = MIMEApplication(pdf_bytes, Name=pdf_filename)
-        part['Content-Disposition'] = f'attachment; filename="{pdf_filename}"'
+    # Resolve attachment bytes and filename
+    final_bytes = attachment_bytes if attachment_bytes is not None else pdf_bytes
+    final_filename = attachment_filename
+    if pdf_filename and attachment_bytes is None:
+        final_filename = pdf_filename
+        
+    # Resume Attachment
+    if final_bytes:
+        part = MIMEApplication(final_bytes, Name=final_filename)
+        part['Content-Disposition'] = f'attachment; filename="{final_filename}"'
         msg.attach(part)
         
     return msg
 
-def save_to_gmail_drafts(sender_email, app_password, recipient_email, subject, body, pdf_bytes=None, pdf_filename="Hemanth_swarna_ resume.pdf"):
+def save_to_gmail_drafts(sender_email, app_password, recipient_email, subject, body, attachment_bytes=None, attachment_filename="Hemanth_swarna_ resume.docx", pdf_bytes=None, pdf_filename=None):
     """
     Saves an email draft with attachment to Gmail's '[Gmail]/Drafts' folder via IMAP.
     Works even if recipient email is not yet available in the JD.
@@ -715,7 +769,16 @@ def save_to_gmail_drafts(sender_email, app_password, recipient_email, subject, b
     
     try:
         recip = recipient_email if (recipient_email and recipient_email != "N/A" and "@" in recipient_email) else ""
-        msg = create_mime_message(sender_email, recip, subject, body, pdf_bytes, pdf_filename)
+        msg = create_mime_message(
+            sender_email=sender_email,
+            recipient_email=recip,
+            subject=subject,
+            body=body,
+            attachment_bytes=attachment_bytes,
+            attachment_filename=attachment_filename,
+            pdf_bytes=pdf_bytes,
+            pdf_filename=pdf_filename
+        )
         raw_msg = msg.as_bytes()
         
         # Connect to Gmail IMAP
@@ -764,7 +827,7 @@ def save_to_gmail_drafts(sender_email, app_password, recipient_email, subject, b
     except Exception as e:
         return False, f"Gmail IMAP error: {str(e)}"
 
-def send_email_smtp(sender_email, app_password, recipient_email, subject, body, pdf_bytes=None, pdf_filename="Hemanth_swarna_ resume.pdf"):
+def send_email_smtp(sender_email, app_password, recipient_email, subject, body, attachment_bytes=None, attachment_filename="Hemanth_swarna_ resume.docx", pdf_bytes=None, pdf_filename=None):
     """
     Sends an email with attachment directly via Gmail SMTP.
     Returns (success: bool, message: str)
@@ -777,7 +840,16 @@ def send_email_smtp(sender_email, app_password, recipient_email, subject, body, 
     clean_password = app_password.replace(" ", "").strip()
     
     try:
-        msg = create_mime_message(sender_email, recipient_email, subject, body, pdf_bytes, pdf_filename)
+        msg = create_mime_message(
+            sender_email=sender_email,
+            recipient_email=recipient_email,
+            subject=subject,
+            body=body,
+            attachment_bytes=attachment_bytes,
+            attachment_filename=attachment_filename,
+            pdf_bytes=pdf_bytes,
+            pdf_filename=pdf_filename
+        )
         
         server = smtplib.SMTP("smtp.gmail.com", 587, timeout=25)
         server.ehlo()
@@ -991,19 +1063,27 @@ www.linkedin.com/in/swarna-hemanth
                     pdf_bytes = base_pdf_bytes
                     is_base_fallback = True
             
+            # --- STEP 3.5: CONVERT PDF TO WORD (.DOCX) ---
+            self._update_progress(job_id, "Processing...")
+            docx_bytes = convert_pdf_to_docx(pdf_bytes) if pdf_bytes else None
+            
             # --- STEP 4: AUTO-SAVE LOCALLY ---
             self._update_progress(job_id, "Processing...")
             if download_dir and pdf_bytes:
                 save_files_locally(
                     latex_content=latex_content,
                     pdf_bytes=pdf_bytes,
+                    docx_bytes=docx_bytes,
                     company=company_name,
                     download_dir=download_dir
                 )
                 
-            # --- STEP 5: GMAIL DRAFT CREATION ---
+            # --- STEP 5: GMAIL DRAFT CREATION (ATTACH WORD DOCX) ---
             draft_status_msg = "Draft ready locally"
             draft_created_in_gmail = False
+            
+            attachment_bytes = docx_bytes if docx_bytes else pdf_bytes
+            attachment_filename = "Hemanth_swarna_ resume.docx" if docx_bytes else "Hemanth_swarna_ resume.pdf"
             
             if auto_create_draft and gmail_app_password:
                 self._update_progress(job_id, "Processing...")
@@ -1013,8 +1093,8 @@ www.linkedin.com/in/swarna-hemanth
                     recipient_email=recipient_email_val,
                     subject=subject_val,
                     body=email_body_val,
-                    pdf_bytes=pdf_bytes,
-                    pdf_filename="Hemanth_swarna_ resume.pdf"
+                    attachment_bytes=attachment_bytes,
+                    attachment_filename=attachment_filename
                 )
                 if draft_ok:
                     draft_status_msg = "Saved in Gmail Drafts"
@@ -1047,6 +1127,7 @@ www.linkedin.com/in/swarna-hemanth
                 "email_body": email_body_val,
                 "latex_content": latex_content,
                 "pdf_bytes": pdf_bytes,
+                "docx_bytes": docx_bytes,
                 "compile_error": compile_err,
                 "is_base_fallback": is_base_fallback,
                 "draft_status": draft_status_msg,
@@ -1814,18 +1895,26 @@ def render_tailored_outputs():
                     st.session_state.applications[active_key]["subject"] = edited_subject
                     st.session_state.applications[active_key]["email_body"] = edited_body
                 
-                # Attachment status
+                # Attachment status (Word .docx format)
                 current_pdf = app.get("pdf_bytes")
+                current_docx = app.get("docx_bytes")
+                if not current_docx and current_pdf:
+                    current_docx = convert_pdf_to_docx(current_pdf)
+                    st.session_state.applications[active_key]["docx_bytes"] = current_docx
+
+                active_attachment = current_docx if current_docx else current_pdf
+                active_att_filename = "Hemanth_swarna_ resume.docx" if current_docx else "Hemanth_swarna_ resume.pdf"
                 is_base_fallback = app.get("is_base_fallback", False)
-                if current_pdf:
-                    pdf_size_kb = len(current_pdf) / 1024
+                
+                if active_attachment:
+                    att_size_kb = len(active_attachment) / 1024
                     if is_base_fallback:
-                        st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *(Base Fallback, {pdf_size_kb:.1f} KB)*")
-                        st.caption("ℹ️ Tailored LaTeX had compilation errors, so the clean base resume PDF was attached to the draft. You can edit the LaTeX on the right and click ⟳ Recompile PDF.")
+                        st.markdown(f"Attached: `{active_att_filename}` *(Base Fallback, {att_size_kb:.1f} KB)*")
+                        st.caption("ℹ️ Tailored LaTeX had compilation errors, so the clean base resume Word document was attached to the draft. You can edit the LaTeX on the right and click ⟳ Recompile Resume.")
                     else:
-                        st.markdown(f"Attached: `Hemanth_swarna_ resume.pdf` *({pdf_size_kb:.1f} KB)*")
+                        st.markdown(f"Attached: `{active_att_filename}` *(Word Document, {att_size_kb:.1f} KB)*")
                 else:
-                    st.markdown("Attachment: `PDF pending compilation`")
+                    st.markdown("Attachment: `Resume pending generation`")
                     
                 st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
                 
@@ -1846,8 +1935,8 @@ def render_tailored_outputs():
                                     recipient_email=edited_to,
                                     subject=edited_subject,
                                     body=edited_body,
-                                    pdf_bytes=current_pdf,
-                                    pdf_filename="Hemanth_swarna_ resume.pdf"
+                                    attachment_bytes=active_attachment,
+                                    attachment_filename=active_att_filename
                                 )
                                 if send_ok:
                                     st.session_state.applications[active_key]["email_sent"] = True
@@ -1870,8 +1959,8 @@ def render_tailored_outputs():
                                     recipient_email=edited_to,
                                     subject=edited_subject,
                                     body=edited_body,
-                                    pdf_bytes=current_pdf,
-                                    pdf_filename="Hemanth_swarna_ resume.pdf"
+                                    attachment_bytes=active_attachment,
+                                    attachment_filename=active_att_filename
                                 )
                                 if draft_ok:
                                     st.session_state.applications[active_key]["draft_created_in_gmail"] = True
@@ -1906,17 +1995,20 @@ def render_tailored_outputs():
                 # Action Buttons
                 st.markdown("##### Resume Actions")
                 
-                btn_c1, btn_c2, btn_c3 = st.columns([1.2, 1, 1])
+                btn_c1, btn_c2, btn_c3, btn_c4 = st.columns([1.1, 0.9, 0.9, 1.1])
                 
                 with btn_c1:
-                    if st.button("⟳ Recompile PDF", key=f"recomp_{app['id']}", use_container_width=True):
-                        with st.spinner("Re-compiling PDF..."):
+                    if st.button("⟳ Recompile", key=f"recomp_{app['id']}", use_container_width=True):
+                        with st.spinner("Re-compiling PDF & Word doc..."):
                             pdf_b, comp_err = compile_latex(edited_latex)
+                            docx_b = None
                             if pdf_b:
+                                docx_b = convert_pdf_to_docx(pdf_b)
                                 st.session_state.applications[active_key]["pdf_bytes"] = pdf_b
+                                st.session_state.applications[active_key]["docx_bytes"] = docx_b
                                 st.session_state.applications[active_key]["compile_error"] = None
                                 st.session_state.applications[active_key]["is_base_fallback"] = False
-                                st.toast("PDF successfully recompiled")
+                                st.toast("Resume recompiled successfully")
                             else:
                                 st.session_state.applications[active_key]["compile_error"] = comp_err
                                 st.toast("Compilation encountered an issue")
@@ -1924,6 +2016,7 @@ def render_tailored_outputs():
                                 save_files_locally(
                                     latex_content=edited_latex,
                                     pdf_bytes=pdf_b,
+                                    docx_bytes=docx_b,
                                     company=app.get("company", "Company"),
                                     download_dir=download_dir
                                 )
@@ -1931,7 +2024,7 @@ def render_tailored_outputs():
                             
                 with btn_c2:
                     st.download_button(
-                        label="↓ Download .tex",
+                        label="↓ .tex",
                         data=app.get("latex_content", ""),
                         file_name="Hemanth_swarna_ resume.tex",
                         mime="text/plain",
@@ -1942,7 +2035,7 @@ def render_tailored_outputs():
                     pdf_bytes = app.get("pdf_bytes")
                     if pdf_bytes:
                         st.download_button(
-                            label="↓ Download PDF",
+                            label="↓ PDF",
                             data=pdf_bytes,
                             file_name="Hemanth_swarna_ resume.pdf",
                             mime="application/pdf",
@@ -1950,6 +2043,32 @@ def render_tailored_outputs():
                         )
                     else:
                         st.button("PDF Pending", disabled=True, use_container_width=True)
+                        
+                with btn_c4:
+                    docx_bytes = app.get("docx_bytes")
+                    if docx_bytes:
+                        st.download_button(
+                            label="↓ Word (.docx)",
+                            data=docx_bytes,
+                            file_name="Hemanth_swarna_ resume.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            use_container_width=True
+                        )
+                    elif pdf_bytes:
+                        converted_docx = convert_pdf_to_docx(pdf_bytes)
+                        if converted_docx:
+                            st.session_state.applications[active_key]["docx_bytes"] = converted_docx
+                            st.download_button(
+                                label="↓ Word (.docx)",
+                                data=converted_docx,
+                                file_name="Hemanth_swarna_ resume.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                use_container_width=True
+                            )
+                        else:
+                            st.button("Word Pending", disabled=True, use_container_width=True)
+                    else:
+                        st.button("Word Pending", disabled=True, use_container_width=True)
                 
                 compile_error = app.get("compile_error")
                 if compile_error:
