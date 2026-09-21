@@ -905,7 +905,8 @@ class BackgroundJobManager:
         self.lock = threading.Lock()
 
     def submit_job(self, job_id, jd_text, provider, api_key, cheaper_model, premium_model,
-                   base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir):
+                   base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir,
+                   attachment_format="Word (.docx)"):
         with self.lock:
             self.jobs[job_id] = {
                 "id": job_id,
@@ -918,7 +919,8 @@ class BackgroundJobManager:
         self.executor.submit(
             self._run_job_pipeline,
             job_id, jd_text, provider, api_key, cheaper_model, premium_model,
-            base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir
+            base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir,
+            attachment_format
         )
 
     def _update_progress(self, job_id, progress_msg):
@@ -927,7 +929,8 @@ class BackgroundJobManager:
                 self.jobs[job_id]["progress"] = progress_msg
 
     def _run_job_pipeline(self, job_id, jd_text, provider, api_key, cheaper_model, premium_model,
-                          base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir):
+                          base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir,
+                          attachment_format="Word (.docx)"):
         try:
             # --- STEP 1: EXTRACT METADATA, LOCATION & WRITE COVER EMAIL ---
             self._update_progress(job_id, "Processing...")
@@ -1078,12 +1081,16 @@ www.linkedin.com/in/swarna-hemanth
                     download_dir=download_dir
                 )
                 
-            # --- STEP 5: GMAIL DRAFT CREATION (ATTACH WORD DOCX) ---
+            # --- STEP 5: GMAIL DRAFT CREATION (ATTACH CHOSEN FORMAT) ---
             draft_status_msg = "Draft ready locally"
             draft_created_in_gmail = False
             
-            attachment_bytes = docx_bytes if docx_bytes else pdf_bytes
-            attachment_filename = "Hemanth_swarna_ resume.docx" if docx_bytes else "Hemanth_swarna_ resume.pdf"
+            if attachment_format == "PDF (.pdf)":
+                attachment_bytes = pdf_bytes
+                attachment_filename = "Hemanth_swarna_ resume.pdf"
+            else:
+                attachment_bytes = docx_bytes if docx_bytes else pdf_bytes
+                attachment_filename = "Hemanth_swarna_ resume.docx" if docx_bytes else "Hemanth_swarna_ resume.pdf"
             
             if auto_create_draft and gmail_app_password:
                 self._update_progress(job_id, "Processing...")
@@ -1128,6 +1135,7 @@ www.linkedin.com/in/swarna-hemanth
                 "latex_content": latex_content,
                 "pdf_bytes": pdf_bytes,
                 "docx_bytes": docx_bytes,
+                "preferred_format": attachment_format,
                 "compile_error": compile_err,
                 "is_base_fallback": is_base_fallback,
                 "draft_status": draft_status_msg,
@@ -1262,6 +1270,7 @@ cheaper_model = "gemini-2.5-flash"
 sender_email = get_secret("SENDER_EMAIL", "") or get_secret("EMAIL", "") or "hemanthswarna3838@gmail.com"
 gmail_app_password = get_secret("GMAIL_APP_PASSWORD", "") or get_secret("GMAIL_PASSWORD", "") or get_secret("APP_PASSWORD", "")
 auto_create_draft = True
+attachment_format = "Word (.docx)"
 
 default_downloads_folder = os.environ.get("DOWNLOAD_DIR", "")
 if not default_downloads_folder:
@@ -1397,7 +1406,15 @@ with st.sidebar:
             auto_create_draft = st.checkbox(
                 "Auto-save Draft to Gmail on JD run",
                 value=True,
-                help="Automatically uploads a draft with the tailored resume PDF attached to your Gmail 'Drafts' folder."
+                help="Automatically uploads a draft with the tailored resume attached to your Gmail 'Drafts' folder."
+            )
+            
+            attachment_format = st.radio(
+                "Resume Attachment Format",
+                ["Word (.docx)", "PDF (.pdf)"],
+                index=0,
+                horizontal=True,
+                help="Choose whether to attach Word (.docx) or PDF (.pdf) resume by default."
             )
             
             col_test_gmail, col_guide_gmail = st.columns([1.2, 1])
@@ -1609,7 +1626,8 @@ def render_jd_input_and_queue(is_admin_mode=False):
                         sender_email=sender_email,
                         gmail_app_password=gmail_app_password,
                         auto_create_draft=auto_create_draft,
-                        download_dir=download_dir
+                        download_dir=download_dir,
+                        attachment_format=attachment_format
                     )
                     
                     st.session_state.current_jd_input = ""
@@ -1664,7 +1682,8 @@ def render_jd_input_and_queue(is_admin_mode=False):
                             sender_email=sender_email,
                             gmail_app_password=gmail_app_password,
                             auto_create_draft=auto_create_draft,
-                            download_dir=download_dir
+                            download_dir=download_dir,
+                            attachment_format=attachment_format
                         )
                     st.toast(f"Processing {len(pending_jobs)} job(s)")
                     st.rerun()
@@ -1739,7 +1758,8 @@ def render_jd_input_and_queue(is_admin_mode=False):
                                         sender_email=sender_email,
                                         gmail_app_password=gmail_app_password,
                                         auto_create_draft=auto_create_draft,
-                                        download_dir=download_dir
+                                        download_dir=download_dir,
+                                        attachment_format=attachment_format
                                     )
                                     st.rerun()
                         with c2:
@@ -1895,24 +1915,45 @@ def render_tailored_outputs():
                     st.session_state.applications[active_key]["subject"] = edited_subject
                     st.session_state.applications[active_key]["email_body"] = edited_body
                 
-                # Attachment status (Word .docx format)
+                # Choose Resume Attachment Format for this application
+                current_preferred = app.get("preferred_format", "Word (.docx)")
+                fmt_idx = 0 if ("word" in current_preferred.lower() or "docx" in current_preferred.lower()) else 1
+                
+                selected_fmt = st.radio(
+                    "Resume Attachment Format:",
+                    ["Word (.docx)", "PDF (.pdf)"],
+                    index=fmt_idx,
+                    horizontal=True,
+                    key=f"pref_fmt_{app['id']}"
+                )
+                if selected_fmt != app.get("preferred_format"):
+                    st.session_state.applications[active_key]["preferred_format"] = selected_fmt
+                
+                # Resolve active attachment based on selection
                 current_pdf = app.get("pdf_bytes")
                 current_docx = app.get("docx_bytes")
                 if not current_docx and current_pdf:
                     current_docx = convert_pdf_to_docx(current_pdf)
                     st.session_state.applications[active_key]["docx_bytes"] = current_docx
 
-                active_attachment = current_docx if current_docx else current_pdf
-                active_att_filename = "Hemanth_swarna_ resume.docx" if current_docx else "Hemanth_swarna_ resume.pdf"
+                if selected_fmt == "PDF (.pdf)":
+                    active_attachment = current_pdf
+                    active_att_filename = "Hemanth_swarna_ resume.pdf"
+                    format_label = "PDF Document"
+                else:
+                    active_attachment = current_docx if current_docx else current_pdf
+                    active_att_filename = "Hemanth_swarna_ resume.docx" if current_docx else "Hemanth_swarna_ resume.pdf"
+                    format_label = "Word Document (.docx)" if current_docx else "PDF Document"
+
                 is_base_fallback = app.get("is_base_fallback", False)
                 
                 if active_attachment:
                     att_size_kb = len(active_attachment) / 1024
                     if is_base_fallback:
-                        st.markdown(f"Attached: `{active_att_filename}` *(Base Fallback, {att_size_kb:.1f} KB)*")
-                        st.caption("ℹ️ Tailored LaTeX had compilation errors, so the clean base resume Word document was attached to the draft. You can edit the LaTeX on the right and click ⟳ Recompile Resume.")
+                        st.markdown(f"Attached: `{active_att_filename}` *({format_label} - Base Fallback, {att_size_kb:.1f} KB)*")
+                        st.caption("ℹ️ Tailored LaTeX had compilation errors, so the clean base resume was attached to the draft. You can edit the LaTeX on the right and click ⟳ Recompile Resume.")
                     else:
-                        st.markdown(f"Attached: `{active_att_filename}` *(Word Document, {att_size_kb:.1f} KB)*")
+                        st.markdown(f"Attached: `{active_att_filename}` *({format_label}, {att_size_kb:.1f} KB)*")
                 else:
                     st.markdown("Attachment: `Resume pending generation`")
                     
