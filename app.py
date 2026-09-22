@@ -324,6 +324,9 @@ if "current_jd_input" not in st.session_state:
 if "jd_input_counter" not in st.session_state:
     st.session_state.jd_input_counter = 0
 
+if "global_attachment_format" not in st.session_state:
+    st.session_state.global_attachment_format = "Word (.docx)"
+
 # ----------------- AUTHENTICATION GATEKEEPER -----------------
 if not st.session_state.authenticated:
     _, col_center, _ = st.columns([1, 1.4, 1])
@@ -1604,6 +1607,16 @@ def render_jd_input_and_queue(is_admin_mode=False):
         height=200,
         key=f"jd_text_area_{st.session_state.jd_input_counter}"
     )
+    
+    # Toggle Attachment Format Option (Word .docx vs PDF .pdf)
+    attachment_format = st.radio(
+        "Attach to Draft & Email as:",
+        options=["Word (.docx)", "PDF (.pdf)"],
+        index=0 if st.session_state.get("global_attachment_format", "Word (.docx)") == "Word (.docx)" else 1,
+        horizontal=True,
+        key="global_attachment_format_toggle"
+    )
+    st.session_state.global_attachment_format = attachment_format
     
     job_mgr = get_job_manager()
 
