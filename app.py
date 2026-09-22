@@ -904,9 +904,20 @@ class BackgroundJobManager:
         self.jobs = {}  # job_id -> {id, status, progress, error, result}
         self.lock = threading.Lock()
 
-    def submit_job(self, job_id, jd_text, provider, api_key, cheaper_model, premium_model,
-                   base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir,
-                   attachment_format="Word (.docx)"):
+    def submit_job(self, *args, **kwargs):
+        job_id = kwargs.get("job_id") if "job_id" in kwargs else (args[0] if len(args) > 0 else None)
+        jd_text = kwargs.get("jd_text") if "jd_text" in kwargs else (args[1] if len(args) > 1 else "")
+        provider = kwargs.get("provider") if "provider" in kwargs else (args[2] if len(args) > 2 else "Google Gemini")
+        api_key = kwargs.get("api_key") if "api_key" in kwargs else (args[3] if len(args) > 3 else "")
+        cheaper_model = kwargs.get("cheaper_model") if "cheaper_model" in kwargs else (args[4] if len(args) > 4 else "gemini-2.5-flash")
+        premium_model = kwargs.get("premium_model") if "premium_model" in kwargs else (args[5] if len(args) > 5 else "gemini-2.5-flash")
+        base_resume_latex = kwargs.get("base_resume_latex") if "base_resume_latex" in kwargs else (args[6] if len(args) > 6 else "")
+        sender_email = kwargs.get("sender_email") if "sender_email" in kwargs else (args[7] if len(args) > 7 else "")
+        gmail_app_password = kwargs.get("gmail_app_password") if "gmail_app_password" in kwargs else (args[8] if len(args) > 8 else "")
+        auto_create_draft = kwargs.get("auto_create_draft") if "auto_create_draft" in kwargs else (args[9] if len(args) > 9 else True)
+        download_dir = kwargs.get("download_dir") if "download_dir" in kwargs else (args[10] if len(args) > 10 else "")
+        attachment_format = kwargs.get("attachment_format") if "attachment_format" in kwargs else (args[11] if len(args) > 11 else "Word (.docx)")
+
         with self.lock:
             self.jobs[job_id] = {
                 "id": job_id,
@@ -918,9 +929,18 @@ class BackgroundJobManager:
         
         self.executor.submit(
             self._run_job_pipeline,
-            job_id, jd_text, provider, api_key, cheaper_model, premium_model,
-            base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir,
-            attachment_format
+            job_id=job_id,
+            jd_text=jd_text,
+            provider=provider,
+            api_key=api_key,
+            cheaper_model=cheaper_model,
+            premium_model=premium_model,
+            base_resume_latex=base_resume_latex,
+            sender_email=sender_email,
+            gmail_app_password=gmail_app_password,
+            auto_create_draft=auto_create_draft,
+            download_dir=download_dir,
+            attachment_format=attachment_format
         )
 
     def _update_progress(self, job_id, progress_msg):
@@ -928,9 +948,19 @@ class BackgroundJobManager:
             if job_id in self.jobs:
                 self.jobs[job_id]["progress"] = progress_msg
 
-    def _run_job_pipeline(self, job_id, jd_text, provider, api_key, cheaper_model, premium_model,
-                          base_resume_latex, sender_email, gmail_app_password, auto_create_draft, download_dir,
-                          attachment_format="Word (.docx)"):
+    def _run_job_pipeline(self, *args, **kwargs):
+        job_id = kwargs.get("job_id") if "job_id" in kwargs else (args[0] if len(args) > 0 else None)
+        jd_text = kwargs.get("jd_text") if "jd_text" in kwargs else (args[1] if len(args) > 1 else "")
+        provider = kwargs.get("provider") if "provider" in kwargs else (args[2] if len(args) > 2 else "Google Gemini")
+        api_key = kwargs.get("api_key") if "api_key" in kwargs else (args[3] if len(args) > 3 else "")
+        cheaper_model = kwargs.get("cheaper_model") if "cheaper_model" in kwargs else (args[4] if len(args) > 4 else "gemini-2.5-flash")
+        premium_model = kwargs.get("premium_model") if "premium_model" in kwargs else (args[5] if len(args) > 5 else "gemini-2.5-flash")
+        base_resume_latex = kwargs.get("base_resume_latex") if "base_resume_latex" in kwargs else (args[6] if len(args) > 6 else "")
+        sender_email = kwargs.get("sender_email") if "sender_email" in kwargs else (args[7] if len(args) > 7 else "")
+        gmail_app_password = kwargs.get("gmail_app_password") if "gmail_app_password" in kwargs else (args[8] if len(args) > 8 else "")
+        auto_create_draft = kwargs.get("auto_create_draft") if "auto_create_draft" in kwargs else (args[9] if len(args) > 9 else True)
+        download_dir = kwargs.get("download_dir") if "download_dir" in kwargs else (args[10] if len(args) > 10 else "")
+        attachment_format = kwargs.get("attachment_format") if "attachment_format" in kwargs else (args[11] if len(args) > 11 else "Word (.docx)")
         try:
             # --- STEP 1: EXTRACT METADATA, LOCATION & WRITE COVER EMAIL ---
             self._update_progress(job_id, "Processing...")
@@ -1159,9 +1189,13 @@ www.linkedin.com/in/swarna-hemanth
         with self.lock:
             return self.jobs.get(job_id)
 
-@st.cache_resource
+_GLOBAL_JOB_MANAGER = None
+
 def get_job_manager():
-    return BackgroundJobManager(max_workers=5)
+    global _GLOBAL_JOB_MANAGER
+    if _GLOBAL_JOB_MANAGER is None:
+        _GLOBAL_JOB_MANAGER = BackgroundJobManager(max_workers=5)
+    return _GLOBAL_JOB_MANAGER
 
 # ----------------- DYNAMIC MODEL FETCHER -----------------
 def get_available_models(provider, api_key):
