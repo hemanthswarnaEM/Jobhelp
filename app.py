@@ -599,45 +599,6 @@ def latex_to_docx_structured(latex_code):
             r_sec.font.color.rgb = RGBColor(0x00, 0x4F, 0x90)
             add_bottom_border(p_sec, color_hex="004F90", size="6")
 
-            # Highlights / Bullet lists
-            if 'highlights' in sec_content or 'itemize' in sec_content:
-                items = re.findall(r'\\item\s+([\s\S]*?)(?=\\item|\\end\{highlights\}|\\end\{itemize\}|$)', sec_content)
-                for it in items:
-                    it_clean = it.strip()
-                    if not it_clean:
-                        continue
-                    p_it = doc.add_paragraph(style='List Bullet')
-                    p_it.paragraph_format.space_before = Pt(0)
-                    p_it.paragraph_format.space_after = Pt(3)
-                    p_it.paragraph_format.line_spacing = 1.15
-                    format_inlines(p_it, it_clean)
-
-            # Technical Skills (description environment)
-            if 'description' in sec_content:
-                desc_items = re.findall(r'\\item\[\\textbf\{([^}]+)\}:?\]\s*([\s\S]*?)(?=\\item|\\end\{description\}|$)', sec_content)
-                if desc_items:
-                    table = doc.add_table(rows=0, cols=2)
-                    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-                    table.autofit = False
-
-                    for label, val in desc_items:
-                        row = table.add_row()
-                        row.cells[0].width = Inches(2.2)
-                        row.cells[1].width = Inches(5.3)
-
-                        p0 = row.cells[0].paragraphs[0]
-                        p0.paragraph_format.space_before = Pt(1)
-                        p0.paragraph_format.space_after = Pt(2)
-                        r0 = p0.add_run(clean_tex_text(label))
-                        r0.bold = True
-                        r0.font.size = Pt(9)
-                        r0.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
-
-                        p1 = row.cells[1].paragraphs[0]
-                        p1.paragraph_format.space_before = Pt(1)
-                        p1.paragraph_format.space_after = Pt(2)
-                        format_inlines(p1, val.strip())
-
             # Professional Experience blocks
             if 'Experience' in sec_title:
                 sub_blocks = re.split(r'(\\textbf\{[^\}]+\}\s*\\hfill[\s\S]*?(?:\\\\|\n)\s*[^\n\\]+\s*\\hfill[^\n\\]+)', sec_content)
@@ -694,6 +655,33 @@ def latex_to_docx_structured(latex_code):
                     r_yr.italic = True
                     r_yr.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
 
+            # Technical Skills (description environment)
+            elif 'description' in sec_content:
+                desc_items = re.findall(r'\\item\[\\textbf\{([^}]+)\}:?\]\s*([\s\S]*?)(?=\\item|\\end\{description\}|$)', sec_content)
+                if desc_items:
+                    table = doc.add_table(rows=0, cols=2)
+                    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+                    table.autofit = False
+
+                    for label, val in desc_items:
+                        row = table.add_row()
+                        row.cells[0].width = Inches(2.2)
+                        row.cells[1].width = Inches(5.3)
+
+                        p0 = row.cells[0].paragraphs[0]
+                        p0.paragraph_format.space_before = Pt(1)
+                        p0.paragraph_format.space_after = Pt(2)
+                        r0 = p0.add_run(clean_tex_text(label))
+                        r0.bold = True
+                        r0.font.size = Pt(9)
+                        r0.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
+
+                        p1 = row.cells[1].paragraphs[0]
+                        p1.paragraph_format.space_before = Pt(1)
+                        p1.paragraph_format.space_after = Pt(2)
+                        format_inlines(p1, val.strip())
+
+            # Highlights / Bullet lists (Professional Summary, etc.)
             elif 'highlights' in sec_content or 'itemize' in sec_content:
                 items = re.findall(r'\\item\s+([\s\S]*?)(?=\\item|\\end\{highlights\}|\\end\{itemize\}|$)', sec_content)
                 for it in items:
