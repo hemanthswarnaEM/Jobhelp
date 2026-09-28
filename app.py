@@ -640,32 +640,49 @@ def latex_to_docx_structured(latex_code):
 
             # Professional Experience blocks
             if 'Experience' in sec_title:
-                exp_blocks = re.findall(r'\\textbf\{([^}]+)\}\s*\\hfill\s*([^\\]+)\\\\\s*([^\n\\]+)\s*\\hfill\s*([^\n\\]+)', sec_content)
-                for title_role, date_str, company_name, loc_str in exp_blocks:
-                    p_exp = doc.add_paragraph()
-                    p_exp.paragraph_format.space_before = Pt(6)
-                    p_exp.paragraph_format.space_after = Pt(2)
-                    p_exp.paragraph_format.keep_with_next = True
+                sub_blocks = re.split(r'(\\textbf\{[^\}]+\}\s*\\hfill[\s\S]*?(?:\\\\|\n)\s*[^\n\\]+\s*\\hfill[^\n\\]+)', sec_content)
+                for j in range(1, len(sub_blocks), 2):
+                    hdr = sub_blocks[j].strip()
+                    bdy = sub_blocks[j+1].strip() if j+1 < len(sub_blocks) else ''
+                    
+                    m = re.match(r'\\textbf\{([^}]+)\}\s*\\hfill\s*([^\\]+)(?:\\\\|\n)\s*([^\n\\]+)\s*\\hfill\s*([^\n\\]+)', hdr)
+                    if m:
+                        title_role, date_str, company_name, loc_str = m.groups()
+                        p_exp = doc.add_paragraph()
+                        p_exp.paragraph_format.space_before = Pt(8)
+                        p_exp.paragraph_format.space_after = Pt(2)
+                        p_exp.paragraph_format.keep_with_next = True
 
-                    r_role = p_exp.add_run(clean_tex_text(title_role) + "  |  ")
-                    r_role.bold = True
-                    r_role.font.size = Pt(10)
-                    r_role.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
+                        r_role = p_exp.add_run(clean_tex_text(title_role) + "  |  ")
+                        r_role.bold = True
+                        r_role.font.size = Pt(10)
+                        r_role.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
 
-                    r_comp = p_exp.add_run(clean_tex_text(company_name) + " (" + clean_tex_text(loc_str) + ")")
-                    r_comp.bold = True
-                    r_comp.font.color.rgb = RGBColor(0x00, 0x4F, 0x90)
+                        r_comp = p_exp.add_run(clean_tex_text(company_name) + " (" + clean_tex_text(loc_str) + ")")
+                        r_comp.bold = True
+                        r_comp.font.color.rgb = RGBColor(0x00, 0x4F, 0x90)
 
-                    r_date = p_exp.add_run("\t" + clean_tex_text(date_str))
-                    r_date.italic = True
-                    r_date.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+                        r_date = p_exp.add_run("\t" + clean_tex_text(date_str))
+                        r_date.italic = True
+                        r_date.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+                    items = re.findall(r'\\item\s+([\s\S]*?)(?=\\item|\\end\{highlights\}|\\end\{itemize\}|$)', bdy)
+                    for it in items:
+                        it_clean = it.strip()
+                        if not it_clean:
+                            continue
+                        p_it = doc.add_paragraph(style='List Bullet')
+                        p_it.paragraph_format.space_before = Pt(0)
+                        p_it.paragraph_format.space_after = Pt(3)
+                        p_it.paragraph_format.line_spacing = 1.15
+                        format_inlines(p_it, it_clean)
 
             # Education blocks
-            if 'Education' in sec_title:
-                edu_blocks = re.findall(r'\\textbf\{([^}]+)\}\s*\\hfill\s*([^\\]+)\\\\\s*([^\n\\]+)\s*\\hfill\s*([^\n\\]+)', sec_content)
-                for deg_name, yr_str, school_name, loc_str in edu_blocks:
+            elif 'Education' in sec_title:
+                sub_blocks = re.findall(r'\\textbf\{([^}]+)\}\s*\\hfill\s*([^\\]+)(?:\\\\|\n)\s*([^\n\\]+)\s*\\hfill\s*([^\n\\]+)', sec_content)
+                for deg_name, yr_str, school_name, loc_str in sub_blocks:
                     p_edu = doc.add_paragraph()
-                    p_edu.paragraph_format.space_before = Pt(4)
+                    p_edu.paragraph_format.space_before = Pt(6)
                     p_edu.paragraph_format.space_after = Pt(2)
                     
                     r_deg = p_edu.add_run(clean_tex_text(deg_name) + "  |  ")
@@ -676,6 +693,18 @@ def latex_to_docx_structured(latex_code):
                     r_yr = p_edu.add_run("\t" + clean_tex_text(yr_str))
                     r_yr.italic = True
                     r_yr.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+            elif 'highlights' in sec_content or 'itemize' in sec_content:
+                items = re.findall(r'\\item\s+([\s\S]*?)(?=\\item|\\end\{highlights\}|\\end\{itemize\}|$)', sec_content)
+                for it in items:
+                    it_clean = it.strip()
+                    if not it_clean:
+                        continue
+                    p_it = doc.add_paragraph(style='List Bullet')
+                    p_it.paragraph_format.space_before = Pt(0)
+                    p_it.paragraph_format.space_after = Pt(3)
+                    p_it.paragraph_format.line_spacing = 1.15
+                    format_inlines(p_it, it_clean)
 
         tmp_path = os.path.join(tempfile.gettempdir(), f"structured_resume_{os.getpid()}.docx")
         doc.save(tmp_path)
