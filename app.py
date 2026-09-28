@@ -455,12 +455,252 @@ def compile_latex(latex_code):
         except Exception as e:
             return None, f"Local LaTeX compiler failed: {str(e)}"
 
-# ----------------- PDF TO WORD (DOCX) CONVERTER -----------------
-def convert_pdf_to_docx(pdf_bytes):
+# ----------------- HIGH-FIDELITY LATEX TO WORD (DOCX) CONVERTER -----------------
+def latex_to_docx_structured(latex_code):
     """
-    Converts PDF binary data into DOCX (Word) binary data using pdf2docx.
-    Returns docx_bytes, or None if conversion fails.
+    Parses LaTeX resume source directly and builds a clean, highly structured
+    Word (.docx) document matching the precise outline, font hierarchy, spacing,
+    margins, section dividers, bullets, and tables of the original PDF/LaTeX.
     """
+    if not latex_code:
+        return None
+    try:
+        import tempfile
+        import os
+        import re
+        import docx
+        from docx import Document
+        from docx.shared import Inches, Pt, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_TABLE_ALIGNMENT
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+
+        doc = Document()
+        
+        # 1. Margins: 0.4 inch top/bottom/left/right matching LaTeX geometry
+        for section in doc.sections:
+            section.top_margin = Inches(0.4)
+            section.bottom_margin = Inches(0.4)
+            section.left_margin = Inches(0.4)
+            section.right_margin = Inches(0.4)
+            section.header.is_linked_to_previous = False
+            section.footer.is_linked_to_previous = False
+
+        # Set default font and line spacing
+        normal_style = doc.styles['Normal']
+        normal_style.font.name = 'Calibri'
+        normal_style.font.size = Pt(9.5)
+        normal_style.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+
+        def add_bottom_border(paragraph, color_hex="004F90", size="6"):
+            """Adds a clean horizontal accent line under section headers."""
+            pPr = paragraph._p.get_or_add_pPr()
+            pBdr = OxmlElement('w:pBdr')
+            bottom = OxmlElement('w:bottom')
+            bottom.set(qn('w:val'), 'single')
+            bottom.set(qn('w:sz'), size)
+            bottom.set(qn('w:space'), '4')
+            bottom.set(qn('w:color'), color_hex)
+            pBdr.append(bottom)
+            pPr.append(pBdr)
+
+        def clean_tex_text(t):
+            if not t:
+                return ""
+            t = re.sub(r'\\hrefWithoutArrow\{[^}]*\}\{([\s\S]*?)\}', r'\1', t)
+            t = re.sub(r'\\fa[A-Za-z]+\*?', '', t)
+            t = re.sub(r'\\hspace\{[^}]*\}', ' ', t)
+            t = re.sub(r'\\vspace\{[^}]*\}', '', t)
+            t = re.sub(r'\\quad', ' | ', t)
+            t = re.sub(r'\\[a-zA-Z]+', '', t)
+            t = re.sub(r'[\{\}]', '', t)
+            t = re.sub(r'\s+', ' ', t).strip()
+            return t
+
+        def format_inlines(paragraph, raw_text):
+            parts = re.split(r'(\\textbf\{[\s\S]*?\}|\\textit\{[\s\S]*?\})', raw_text)
+            for part in parts:
+                if not part:
+                    continue
+                if part.startswith(r'\textbf{') and part.endswith('}'):
+                    inner = part[8:-1]
+                    r = paragraph.add_run(clean_tex_text(inner))
+                    r.bold = True
+                elif part.startswith(r'\textit{') and part.endswith('}'):
+                    inner = part[8:-1]
+                    r = paragraph.add_run(clean_tex_text(inner))
+                    r.italic = True
+                else:
+                    txt = clean_tex_text(part)
+                    if txt:
+                        paragraph.add_run(txt)
+
+        doc_match = re.search(r'\\begin\{document\}([\s\S]*?)\\end\{document\}', latex_code)
+        body = doc_match.group(1) if doc_match else latex_code
+
+        # 2. Header parsing (Name, Heading, Contact Details)
+        header_m = re.search(r'\\begin\{header\}([\s\S]*?)\\end\{header\}', body)
+        if header_m:
+            h_text = header_m.group(1)
+            name_str = "Hemanth Swarna"
+            
+            p_name = doc.add_paragraph()
+            p_name.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_name.paragraph_format.space_before = Pt(0)
+            p_name.paragraph_format.space_after = Pt(2)
+            r_name = p_name.add_run(name_str)
+            r_name.bold = True
+            r_name.font.size = Pt(18)
+            r_name.font.color.rgb = RGBColor(0x00, 0x4F, 0x90)
+
+            title_m = re.search(r'\{\\large\s+([^}]+)\}', h_text)
+            title_str = title_m.group(1).strip() if title_m else "AI/Ml engineer ( Data Expert)"
+            p_title = doc.add_paragraph()
+            p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_title.paragraph_format.space_before = Pt(0)
+            p_title.paragraph_format.space_after = Pt(4)
+            r_title = p_title.add_run(title_str)
+            r_title.font.size = Pt(11)
+            r_title.font.bold = True
+            r_title.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+
+            contact_parts = []
+            if "hemanthswarna3838@gmail.com" in h_text:
+                contact_parts.append("hemanthswarna3838@gmail.com")
+            if "213" in h_text or "986" in h_text:
+                contact_parts.append("+1 (213) 986-6016")
+            if "linkedin" in h_text:
+                contact_parts.append("linkedin.com/in/hemanth-swarna")
+
+            p_cnt = doc.add_paragraph()
+            p_cnt.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_cnt.paragraph_format.space_before = Pt(0)
+            p_cnt.paragraph_format.space_after = Pt(10)
+            r_cnt = p_cnt.add_run(" | ".join(contact_parts))
+            r_cnt.font.size = Pt(9)
+            r_cnt.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+            body = body.replace(header_m.group(0), "")
+
+        # 3. Section Parsing
+        sections = re.split(r'\\section\{([^}]+)\}', body)
+        for i in range(1, len(sections), 2):
+            sec_title = sections[i].strip()
+            sec_content = sections[i+1].strip()
+
+            p_sec = doc.add_paragraph()
+            p_sec.paragraph_format.space_before = Pt(10)
+            p_sec.paragraph_format.space_after = Pt(4)
+            p_sec.paragraph_format.keep_with_next = True
+            r_sec = p_sec.add_run(sec_title.upper())
+            r_sec.bold = True
+            r_sec.font.size = Pt(11)
+            r_sec.font.color.rgb = RGBColor(0x00, 0x4F, 0x90)
+            add_bottom_border(p_sec, color_hex="004F90", size="6")
+
+            # Highlights / Bullet lists
+            if 'highlights' in sec_content or 'itemize' in sec_content:
+                items = re.findall(r'\\item\s+([\s\S]*?)(?=\\item|\\end\{highlights\}|\\end\{itemize\}|$)', sec_content)
+                for it in items:
+                    it_clean = it.strip()
+                    if not it_clean:
+                        continue
+                    p_it = doc.add_paragraph(style='List Bullet')
+                    p_it.paragraph_format.space_before = Pt(0)
+                    p_it.paragraph_format.space_after = Pt(3)
+                    p_it.paragraph_format.line_spacing = 1.15
+                    format_inlines(p_it, it_clean)
+
+            # Technical Skills (description environment)
+            if 'description' in sec_content:
+                desc_items = re.findall(r'\\item\[\\textbf\{([^}]+)\}:?\]\s*([\s\S]*?)(?=\\item|\\end\{description\}|$)', sec_content)
+                if desc_items:
+                    table = doc.add_table(rows=0, cols=2)
+                    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+                    table.autofit = False
+
+                    for label, val in desc_items:
+                        row = table.add_row()
+                        row.cells[0].width = Inches(2.2)
+                        row.cells[1].width = Inches(5.3)
+
+                        p0 = row.cells[0].paragraphs[0]
+                        p0.paragraph_format.space_before = Pt(1)
+                        p0.paragraph_format.space_after = Pt(2)
+                        r0 = p0.add_run(clean_tex_text(label))
+                        r0.bold = True
+                        r0.font.size = Pt(9)
+                        r0.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
+
+                        p1 = row.cells[1].paragraphs[0]
+                        p1.paragraph_format.space_before = Pt(1)
+                        p1.paragraph_format.space_after = Pt(2)
+                        format_inlines(p1, val.strip())
+
+            # Professional Experience blocks
+            if 'Experience' in sec_title:
+                exp_blocks = re.findall(r'\\textbf\{([^}]+)\}\s*\\hfill\s*([^\\]+)\\\\\s*([^\n\\]+)\s*\\hfill\s*([^\n\\]+)', sec_content)
+                for title_role, date_str, company_name, loc_str in exp_blocks:
+                    p_exp = doc.add_paragraph()
+                    p_exp.paragraph_format.space_before = Pt(6)
+                    p_exp.paragraph_format.space_after = Pt(2)
+                    p_exp.paragraph_format.keep_with_next = True
+
+                    r_role = p_exp.add_run(clean_tex_text(title_role) + "  |  ")
+                    r_role.bold = True
+                    r_role.font.size = Pt(10)
+                    r_role.font.color.rgb = RGBColor(0x11, 0x11, 0x11)
+
+                    r_comp = p_exp.add_run(clean_tex_text(company_name) + " (" + clean_tex_text(loc_str) + ")")
+                    r_comp.bold = True
+                    r_comp.font.color.rgb = RGBColor(0x00, 0x4F, 0x90)
+
+                    r_date = p_exp.add_run("\t" + clean_tex_text(date_str))
+                    r_date.italic = True
+                    r_date.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+            # Education blocks
+            if 'Education' in sec_title:
+                edu_blocks = re.findall(r'\\textbf\{([^}]+)\}\s*\\hfill\s*([^\\]+)\\\\\s*([^\n\\]+)\s*\\hfill\s*([^\n\\]+)', sec_content)
+                for deg_name, yr_str, school_name, loc_str in edu_blocks:
+                    p_edu = doc.add_paragraph()
+                    p_edu.paragraph_format.space_before = Pt(4)
+                    p_edu.paragraph_format.space_after = Pt(2)
+                    
+                    r_deg = p_edu.add_run(clean_tex_text(deg_name) + "  |  ")
+                    r_deg.bold = True
+                    r_school = p_edu.add_run(clean_tex_text(school_name) + " (" + clean_tex_text(loc_str) + ")")
+                    r_school.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+                    
+                    r_yr = p_edu.add_run("\t" + clean_tex_text(yr_str))
+                    r_yr.italic = True
+                    r_yr.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+        tmp_path = os.path.join(tempfile.gettempdir(), f"structured_resume_{os.getpid()}.docx")
+        doc.save(tmp_path)
+        with open(tmp_path, 'rb') as f:
+            data = f.read()
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+        return data
+    except Exception as e:
+        print(f"Error in structured LaTeX-to-DOCX conversion: {e}")
+        return None
+
+def convert_pdf_to_docx(pdf_bytes, latex_code=None):
+    """
+    Converts PDF binary or LaTeX source into DOCX (Word) binary data.
+    First attempts direct structured generation from LaTeX for maximum fidelity.
+    Falls back to pdf2docx if LaTeX code is omitted or parsing fails.
+    """
+    if latex_code:
+        docx_bytes = latex_to_docx_structured(latex_code)
+        if docx_bytes:
+            return docx_bytes
+
     if not pdf_bytes:
         return None
     try:
@@ -1101,7 +1341,7 @@ www.linkedin.com/in/swarna-hemanth
             
             # --- STEP 3.5: CONVERT PDF TO WORD (.DOCX) ---
             self._update_progress(job_id, "Processing...")
-            docx_bytes = convert_pdf_to_docx(pdf_bytes) if pdf_bytes else None
+            docx_bytes = convert_pdf_to_docx(pdf_bytes, latex_code=latex_content) if pdf_bytes else None
             
             # --- STEP 4: AUTO-SAVE LOCALLY ---
             self._update_progress(job_id, "Processing...")
@@ -2091,7 +2331,7 @@ def render_tailored_outputs():
                             pdf_b, comp_err = compile_latex(edited_latex)
                             docx_b = None
                             if pdf_b:
-                                docx_b = convert_pdf_to_docx(pdf_b)
+                                docx_b = convert_pdf_to_docx(pdf_b, latex_code=edited_latex)
                                 st.session_state.applications[active_key]["pdf_bytes"] = pdf_b
                                 st.session_state.applications[active_key]["docx_bytes"] = docx_b
                                 st.session_state.applications[active_key]["compile_error"] = None
