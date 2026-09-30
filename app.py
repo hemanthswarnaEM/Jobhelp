@@ -373,42 +373,35 @@ def compile_latex(latex_code):
     import requests
     import time
     
-    # --- METHOD 1: ONLINE CGI COMPILATION (TEXLIVE.NET) ---
+    # --- METHOD 1: ONLINE COMPILATION (TEXLIVE.NET & LATEXONLINE.CC FAILOVER) ---
     online_err_msg = None
+    
+    # 1A. Primary: TeXLive.net CGI
     try:
         files = [
             ("filename[]", (None, "document.tex")),
             ("filecontents[]", ("document.tex", latex_code.encode("utf-8"), "text/plain"))
         ]
         data = {"engine": "pdflatex", "return": "pdf"}
+        res = requests.post("https://texlive.net/cgi-bin/latexcgi", files=files, data=data, timeout=10)
         
-        # Try compiling with a 30s timeout and 2 attempts
-        for attempt in range(2):
-            try:
-                res = requests.post("https://texlive.net/cgi-bin/latexcgi", files=files, data=data, timeout=30)
-                
-                # Handle redirects
-                if res.status_code in (301, 302):
-                    loc = res.headers.get("location")
-                    if loc:
-                        res = requests.get(f"https://texlive.net{loc}", timeout=30)
-                
-                if res.ok:
-                    content = res.content
-                    if content.startswith(b"%PDF-"):
-                        return content, None
-                    else:
-                        # Got log instead of PDF, raise error to fall back or report
-                        log_msg = content.decode("utf-8", errors="ignore")
-                        raise RuntimeError(f"CGI returned non-PDF. Log:\n{log_msg[-1000:]}")
-            except Exception as e:
-                if attempt == 1:
-                    raise RuntimeError(f"Online compilation failed: {str(e)}")
-                time.sleep(1)
-    except Exception as online_err:
-        online_err_msg = str(online_err)
-        # Proceed to fallback local compilation
-        pass
+        if res.status_code in (301, 302):
+            loc = res.headers.get("location")
+            if loc:
+                res = requests.get(f"https://texlive.net{loc}", timeout=10)
+        
+        if res.ok and res.content.startswith(b"%PDF-"):
+            return res.content, None
+    except Exception as e:
+        online_err_msg = f"texlive.net failed: {str(e)}"
+        
+    # 1B. Secondary Failover: LaTeXOnline.cc
+    try:
+        res = requests.post("https://latexonline.cc/compile", data={"text": latex_code}, timeout=10)
+        if res.ok and res.content.startswith(b"%PDF-"):
+            return res.content, None
+    except Exception as e:
+        online_err_msg = f"{online_err_msg} | latexonline.cc failed: {str(e)}" if online_err_msg else f"latexonline.cc failed: {str(e)}"
 
     # --- METHOD 2: FALLBACK TO LOCAL PDFLATEX COMPILER ---
     pdflatex_path = shutil.which("pdflatex")
