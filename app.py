@@ -26,6 +26,32 @@ if os.path.exists(miktex_bin) and miktex_bin not in os.environ["PATH"]:
     os.environ["PATH"] += os.pathsep + miktex_bin
 
 # Set page configuration
+USER_SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "user_settings.json")
+
+def load_user_settings():
+    defaults = {
+        "global_resume_mode": "Edit based on JD",
+        "global_attachment_format": "Word (.docx)"
+    }
+    if os.path.exists(USER_SETTINGS_FILE):
+        try:
+            with open(USER_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    defaults.update(data)
+        except Exception:
+            pass
+    return defaults
+
+def save_user_setting(key, value):
+    settings = load_user_settings()
+    settings[key] = value
+    try:
+        with open(USER_SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except Exception:
+        pass
+
 st.set_page_config(
     page_title="JobCraft Studio - Precision Resume & Outreach Suite",
     page_icon="💼",
@@ -324,11 +350,13 @@ if "current_jd_input" not in st.session_state:
 if "jd_input_counter" not in st.session_state:
     st.session_state.jd_input_counter = 0
 
+user_saved_prefs = load_user_settings()
+
 if "global_attachment_format" not in st.session_state:
-    st.session_state.global_attachment_format = "Word (.docx)"
+    st.session_state.global_attachment_format = user_saved_prefs.get("global_attachment_format", "Word (.docx)")
 
 if "global_resume_mode" not in st.session_state:
-    st.session_state.global_resume_mode = "Edit based on JD"
+    st.session_state.global_resume_mode = user_saved_prefs.get("global_resume_mode", "Edit based on JD")
 
 # ----------------- AUTHENTICATION GATEKEEPER -----------------
 if not st.session_state.authenticated:
@@ -1843,6 +1871,38 @@ st.markdown("""
 def render_jd_input_and_queue(is_admin_mode=False):
     st.header("Job Descriptions Queue")
     
+    # Modern Toggle Bar ABOVE Job Description Text Box
+    with st.container(border=True):
+        col_t1, col_t2 = st.columns([1.3, 1])
+        with col_t1:
+            current_mode = st.session_state.get("global_resume_mode", "Edit based on JD")
+            selected_mode = st.radio(
+                "⚡ Resume Customization Mode:",
+                options=["✨ Edit based on JD", "📄 Base Resume"],
+                index=0 if "Base Resume" not in current_mode else 1,
+                horizontal=True,
+                key="global_resume_mode_toggle",
+                help="Choose whether to tailor your resume based on the target JD or use your Base Resume directly."
+            )
+            resume_mode = "Base Resume" if "Base Resume" in selected_mode else "Edit based on JD"
+            if resume_mode != st.session_state.get("global_resume_mode"):
+                st.session_state.global_resume_mode = resume_mode
+                save_user_setting("global_resume_mode", resume_mode)
+
+        with col_t2:
+            current_fmt = st.session_state.get("global_attachment_format", "Word (.docx)")
+            attachment_format = st.radio(
+                "📎 Draft Attachment Format:",
+                options=["Word (.docx)", "PDF (.pdf)"],
+                index=0 if current_fmt == "Word (.docx)" else 1,
+                horizontal=True,
+                key="global_attachment_format_toggle",
+                help="Select default format for Gmail draft attachments."
+            )
+            if attachment_format != st.session_state.get("global_attachment_format"):
+                st.session_state.global_attachment_format = attachment_format
+                save_user_setting("global_attachment_format", attachment_format)
+
     # File uploader option
     uploaded_file = st.file_uploader(
         "Upload Job Description (TXT or PDF)", 
@@ -1877,30 +1937,6 @@ def render_jd_input_and_queue(is_admin_mode=False):
         height=200,
         key=f"jd_text_area_{st.session_state.jd_input_counter}"
     )
-    
-    # UI Options Controls: Resume Mode & Attachment Format
-    with st.container(border=True):
-        st.markdown("**⚙️ Application Preferences**")
-        
-        selected_mode = st.radio(
-            "Resume Version:",
-            options=["✨ Edit based on JD (Default)", "📄 Base Resume (Unedited)"],
-            index=0 if "Base Resume" not in st.session_state.get("global_resume_mode", "Edit based on JD") else 1,
-            horizontal=True,
-            key="global_resume_mode_toggle",
-            help="Choose whether to update/customize your resume based on the job description (default) or use your unedited Base Resume."
-        )
-        resume_mode = "Base Resume" if "Base Resume" in selected_mode else "Edit based on JD"
-        st.session_state.global_resume_mode = resume_mode
-
-        attachment_format = st.radio(
-            "Attach to Draft & Email as:",
-            options=["Word (.docx)", "PDF (.pdf)"],
-            index=0 if st.session_state.get("global_attachment_format", "Word (.docx)") == "Word (.docx)" else 1,
-            horizontal=True,
-            key="global_attachment_format_toggle"
-        )
-        st.session_state.global_attachment_format = attachment_format
     
     job_mgr = get_job_manager()
 
