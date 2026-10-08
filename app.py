@@ -327,6 +327,9 @@ if "jd_input_counter" not in st.session_state:
 if "global_attachment_format" not in st.session_state:
     st.session_state.global_attachment_format = "Word (.docx)"
 
+if "global_resume_mode" not in st.session_state:
+    st.session_state.global_resume_mode = "Edit based on JD"
+
 # ----------------- AUTHENTICATION GATEKEEPER -----------------
 if not st.session_state.authenticated:
     _, col_center, _ = st.columns([1, 1.4, 1])
@@ -1170,6 +1173,7 @@ class BackgroundJobManager:
         auto_create_draft = kwargs.get("auto_create_draft") if "auto_create_draft" in kwargs else (args[9] if len(args) > 9 else True)
         download_dir = kwargs.get("download_dir") if "download_dir" in kwargs else (args[10] if len(args) > 10 else "")
         attachment_format = kwargs.get("attachment_format") if "attachment_format" in kwargs else (args[11] if len(args) > 11 else "Word (.docx)")
+        resume_mode = kwargs.get("resume_mode") if "resume_mode" in kwargs else (args[12] if len(args) > 12 else "Edit based on JD")
 
         with self.lock:
             self.jobs[job_id] = {
@@ -1193,7 +1197,8 @@ class BackgroundJobManager:
             gmail_app_password=gmail_app_password,
             auto_create_draft=auto_create_draft,
             download_dir=download_dir,
-            attachment_format=attachment_format
+            attachment_format=attachment_format,
+            resume_mode=resume_mode
         )
 
     def _update_progress(self, job_id, progress_msg):
@@ -1214,6 +1219,7 @@ class BackgroundJobManager:
         auto_create_draft = kwargs.get("auto_create_draft") if "auto_create_draft" in kwargs else (args[9] if len(args) > 9 else True)
         download_dir = kwargs.get("download_dir") if "download_dir" in kwargs else (args[10] if len(args) > 10 else "")
         attachment_format = kwargs.get("attachment_format") if "attachment_format" in kwargs else (args[11] if len(args) > 11 else "Word (.docx)")
+        resume_mode = kwargs.get("resume_mode") if "resume_mode" in kwargs else (args[12] if len(args) > 12 else "Edit based on JD")
         try:
             # --- STEP 1: EXTRACT METADATA, LOCATION & WRITE COVER EMAIL ---
             self._update_progress(job_id, "Processing...")
@@ -1298,43 +1304,46 @@ www.linkedin.com/in/swarna-hemanth
                 
             email_body_val = f"{body_cleaned}\n\n{standard_signature}"
                 
-            # --- STEP 2: TAILOR RESUME IN LATEX ---
-            self._update_progress(job_id, "Processing...")
-            
-            # Ensure base resume passed to LLM has the exact constant heading
+            # --- STEP 2: TAILOR OR USE BASE RESUME IN LATEX ---
             base_resume_latex = normalize_resume_heading(base_resume_latex)
             
-            resume_editor_prompt = f"""
-            You are a professional resume editor. Take the base resume in LaTeX form and the target JD below.
-            Extract all the keywords in the JD and see if there are any missing in the base resume.
-            Implement the necessary changes as per the JD in the resume by keeping the structure of the resume intact:
-            - CRITICAL CONSTANT: Do NOT edit, alter, or replace the candidate's title/heading below the name in the header. It MUST remain constant as "AI/Ml engineer ( Data Expert)" (i.e. {{\\large AI/Ml engineer ( Data Expert)}}) on all tailored resumes regardless of the job title in the JD.
-            - Do NOT change the candidate name, contact info, company names (FedEx, Citi Bank, CVS Health, State of Maryland) or timelines.
-            - Keep the number of bullet points under each section exactly the same as the base resume.
-            - Keep the size/length of each corresponding bullet point approximately same.
-            - Inject high-density keywords and skills from the JD into the bullet points where relevant, maintaining professional tone.
-            - Ensure all LaTeX control characters (like &, %, _) are properly escaped (e.g. use \\&, \\%, \\_).
-            - Output ONLY valid LaTeX code. Do not include markdown code wrapping blocks, explanations, or chats. Make sure there are no syntax errors so it compiles cleanly.
-            
-            BASE RESUME:
-            -----------------
-            {base_resume_latex}
-            -----------------
-            
-            TARGET JOB DESCRIPTION:
-            -----------------
-            {jd_text}
-            -----------------
-            """
-            
-            resume_raw = call_llm(
-                provider=provider,
-                api_key=api_key,
-                model=premium_model,
-                prompt=resume_editor_prompt
-            )
-            latex_content = extract_latex_from_response(resume_raw)
-            latex_content = normalize_resume_heading(latex_content)
+            if resume_mode and "Base Resume" in resume_mode:
+                self._update_progress(job_id, "Using Base Resume (No JD Edits)...")
+                latex_content = base_resume_latex
+            else:
+                self._update_progress(job_id, "Processing...")
+                
+                resume_editor_prompt = f"""
+                You are a professional resume editor. Take the base resume in LaTeX form and the target JD below.
+                Extract all the keywords in the JD and see if there are any missing in the base resume.
+                Implement the necessary changes as per the JD in the resume by keeping the structure of the resume intact:
+                - CRITICAL CONSTANT: Do NOT edit, alter, or replace the candidate's title/heading below the name in the header. It MUST remain constant as "AI/Ml engineer ( Data Expert)" (i.e. {{\\large AI/Ml engineer ( Data Expert)}}) on all tailored resumes regardless of the job title in the JD.
+                - Do NOT change the candidate name, contact info, company names (FedEx, Citi Bank, CVS Health, State of Maryland) or timelines.
+                - Keep the number of bullet points under each section exactly the same as the base resume.
+                - Keep the size/length of each corresponding bullet point approximately same.
+                - Inject high-density keywords and skills from the JD into the bullet points where relevant, maintaining professional tone.
+                - Ensure all LaTeX control characters (like &, %, _) are properly escaped (e.g. use \\&, \\%, \\_).
+                - Output ONLY valid LaTeX code. Do not include markdown code wrapping blocks, explanations, or chats. Make sure there are no syntax errors so it compiles cleanly.
+                
+                BASE RESUME:
+                -----------------
+                {base_resume_latex}
+                -----------------
+                
+                TARGET JOB DESCRIPTION:
+                -----------------
+                {jd_text}
+                -----------------
+                """
+                
+                resume_raw = call_llm(
+                    provider=provider,
+                    api_key=api_key,
+                    model=premium_model,
+                    prompt=resume_editor_prompt
+                )
+                latex_content = extract_latex_from_response(resume_raw)
+                latex_content = normalize_resume_heading(latex_content)
             
             # --- STEP 3: COMPILE PDF (WITH BASE RESUME FALLBACK) ---
             self._update_progress(job_id, "Processing...")
@@ -1419,6 +1428,7 @@ www.linkedin.com/in/swarna-hemanth
                 "pdf_bytes": pdf_bytes,
                 "docx_bytes": docx_bytes,
                 "preferred_format": attachment_format,
+                "resume_mode": resume_mode,
                 "compile_error": compile_err,
                 "is_base_fallback": is_base_fallback,
                 "draft_status": draft_status_msg,
@@ -1696,6 +1706,16 @@ with st.sidebar:
                 help="Automatically uploads a draft with the tailored resume attached to your Gmail 'Drafts' folder."
             )
             
+            sidebar_resume_mode = st.radio(
+                "Resume Customization Mode",
+                ["✨ Edit based on JD (Default)", "📄 Base Resume (Unedited)"],
+                index=0 if "Base Resume" not in st.session_state.get("global_resume_mode", "Edit based on JD") else 1,
+                horizontal=True,
+                key="sidebar_resume_mode_toggle",
+                help="Choose whether to update/customize your resume based on JD or use unedited Base Resume."
+            )
+            st.session_state.global_resume_mode = "Base Resume" if "Base Resume" in sidebar_resume_mode else "Edit based on JD"
+
             attachment_format = st.radio(
                 "Resume Attachment Format",
                 ["Word (.docx)", "PDF (.pdf)"],
@@ -1858,15 +1878,29 @@ def render_jd_input_and_queue(is_admin_mode=False):
         key=f"jd_text_area_{st.session_state.jd_input_counter}"
     )
     
-    # Toggle Attachment Format Option (Word .docx vs PDF .pdf)
-    attachment_format = st.radio(
-        "Attach to Draft & Email as:",
-        options=["Word (.docx)", "PDF (.pdf)"],
-        index=0 if st.session_state.get("global_attachment_format", "Word (.docx)") == "Word (.docx)" else 1,
-        horizontal=True,
-        key="global_attachment_format_toggle"
-    )
-    st.session_state.global_attachment_format = attachment_format
+    # UI Options Controls: Resume Mode & Attachment Format
+    with st.container(border=True):
+        st.markdown("**⚙️ Application Preferences**")
+        
+        selected_mode = st.radio(
+            "Resume Version:",
+            options=["✨ Edit based on JD (Default)", "📄 Base Resume (Unedited)"],
+            index=0 if "Base Resume" not in st.session_state.get("global_resume_mode", "Edit based on JD") else 1,
+            horizontal=True,
+            key="global_resume_mode_toggle",
+            help="Choose whether to update/customize your resume based on the job description (default) or use your unedited Base Resume."
+        )
+        resume_mode = "Base Resume" if "Base Resume" in selected_mode else "Edit based on JD"
+        st.session_state.global_resume_mode = resume_mode
+
+        attachment_format = st.radio(
+            "Attach to Draft & Email as:",
+            options=["Word (.docx)", "PDF (.pdf)"],
+            index=0 if st.session_state.get("global_attachment_format", "Word (.docx)") == "Word (.docx)" else 1,
+            horizontal=True,
+            key="global_attachment_format_toggle"
+        )
+        st.session_state.global_attachment_format = attachment_format
     
     job_mgr = get_job_manager()
 
@@ -1907,6 +1941,7 @@ def render_jd_input_and_queue(is_admin_mode=False):
                         "id": jd_id,
                         "jd_text": new_jd,
                         "preview": preview_title,
+                        "resume_mode": resume_mode,
                         "status": "Processing",
                         "progress": "",
                         "error": None
@@ -1924,7 +1959,8 @@ def render_jd_input_and_queue(is_admin_mode=False):
                         gmail_app_password=gmail_app_password,
                         auto_create_draft=auto_create_draft,
                         download_dir=download_dir,
-                        attachment_format=attachment_format
+                        attachment_format=attachment_format,
+                        resume_mode=resume_mode
                     )
                     
                     st.session_state.current_jd_input = ""
@@ -1945,6 +1981,7 @@ def render_jd_input_and_queue(is_admin_mode=False):
                         "id": jd_id,
                         "jd_text": new_jd,
                         "preview": preview_title,
+                        "resume_mode": resume_mode,
                         "status": "Pending",
                         "progress": "",
                         "error": None
@@ -1980,7 +2017,8 @@ def render_jd_input_and_queue(is_admin_mode=False):
                             gmail_app_password=gmail_app_password,
                             auto_create_draft=auto_create_draft,
                             download_dir=download_dir,
-                            attachment_format=attachment_format
+                            attachment_format=attachment_format,
+                            resume_mode=pj.get("resume_mode", resume_mode)
                         )
                     st.toast(f"Processing {len(pending_jobs)} job(s)")
                     st.rerun()
@@ -2056,7 +2094,8 @@ def render_jd_input_and_queue(is_admin_mode=False):
                                         gmail_app_password=gmail_app_password,
                                         auto_create_draft=auto_create_draft,
                                         download_dir=download_dir,
-                                        attachment_format=attachment_format
+                                        attachment_format=attachment_format,
+                                        resume_mode=job.get("resume_mode", resume_mode)
                                     )
                                     st.rerun()
                         with c2:
